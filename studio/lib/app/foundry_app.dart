@@ -29,6 +29,13 @@ class _FoundryAppState extends State<FoundryApp> {
 
   late final FlutterPrototypeCatalog _catalog =
       createMaterialPrototypeCatalog();
+  late final GatewayTransport _gatewayTransport =
+      createPlatformGatewayTransport(
+    baseUri: Uri.parse(_gatewayUrl),
+  );
+  late final GatewayToolDiscovery _toolDiscovery = GatewayToolDiscovery(
+    transport: _gatewayTransport,
+  );
   late final StudioSession _session = StudioSession(
     agents: <PrototypeAgent>[
       LocalPrototypeAgent(),
@@ -36,9 +43,7 @@ class _FoundryAppState extends State<FoundryApp> {
         id: 'opencode',
         label: 'OpenCode',
         providerId: 'opencode',
-        transport: createPlatformGatewayTransport(
-          baseUri: Uri.parse(_gatewayUrl),
-        ),
+        transport: _gatewayTransport,
         catalog: _catalog.runtimeCatalog,
       ),
     ],
@@ -70,7 +75,11 @@ class _FoundryAppState extends State<FoundryApp> {
       debugShowCheckedModeBanner: false,
       title: 'Prototype Foundry',
       theme: buildFoundryTheme(),
-      home: StudioPage(session: _session, catalog: _catalog),
+      home: StudioPage(
+        session: _session,
+        catalog: _catalog,
+        toolDiscovery: _toolDiscovery,
+      ),
     );
   }
 }

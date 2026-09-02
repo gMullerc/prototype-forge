@@ -5,6 +5,7 @@ import 'package:prototype_agent/prototype_agent.dart';
 import 'package:prototype_export/prototype_export.dart';
 import 'package:prototype_flutter/prototype_flutter.dart';
 import 'package:prototype_runtime/prototype_runtime.dart';
+import 'package:prototype_tool_discovery/prototype_tool_discovery.dart';
 import 'package:prototype_workspace/prototype_workspace.dart';
 
 import '../application/studio_session.dart';
@@ -37,11 +38,13 @@ class StudioPage extends StatefulWidget {
     required this.session,
     required this.catalog,
     this.workspaceTransfer,
+    this.toolDiscovery,
   });
 
   final StudioSession session;
   final FlutterPrototypeCatalog catalog;
   final WorkspaceTransfer? workspaceTransfer;
+  final ToolDiscovery? toolDiscovery;
 
   @override
   State<StudioPage> createState() => _StudioPageState();
@@ -91,7 +94,12 @@ class _StudioPageState extends State<StudioPage> {
           SafeArea(
             child: Column(
               children: <Widget>[
-                _Header(state: _state, agentLabel: widget.session.agent.label),
+                _Header(
+                  state: _state,
+                  agentLabel: widget.session.agent.label,
+                  onOpenTools:
+                      widget.toolDiscovery == null ? null : _showToolInventory,
+                ),
                 _ProjectBar(
                   state: _state,
                   onSelectProject: widget.session.selectProject,
@@ -133,6 +141,15 @@ class _StudioPageState extends State<StudioPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showToolInventory() async {
+    final ToolDiscovery? discovery = widget.toolDiscovery;
+    if (discovery == null || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ToolInventoryDialog(discovery: discovery),
     );
   }
 
@@ -773,10 +790,15 @@ class _RevisionBadge extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.state, required this.agentLabel});
+  const _Header({
+    required this.state,
+    required this.agentLabel,
+    this.onOpenTools,
+  });
 
   final StudioState state;
   final String agentLabel;
+  final VoidCallback? onOpenTools;
 
   @override
   Widget build(BuildContext context) {
@@ -818,9 +840,213 @@ class _Header extends StatelessWidget {
             _Stamp(label: agentLabel.toUpperCase(), color: FoundryColors.ink),
             const SizedBox(width: 8),
           ],
+          IconButton(
+            key: const Key('tool-discovery-button'),
+            onPressed: onOpenTools,
+            tooltip: 'Ferramentas disponíveis neste computador',
+            icon: const Icon(Icons.devices_other_outlined, size: 18),
+          ),
+          const SizedBox(width: 4),
           _StatusMark(status: state.status),
         ],
       ),
+    );
+  }
+}
+
+class _ToolInventoryDialog extends StatefulWidget {
+  const _ToolInventoryDialog({required this.discovery});
+
+  final ToolDiscovery discovery;
+
+  @override
+  State<_ToolInventoryDialog> createState() => _ToolInventoryDialogState();
+}
+
+class _ToolInventoryDialogState extends State<_ToolInventoryDialog> {
+  List<DiscoveredTool> _tools = const <DiscoveredTool>[];
+  Object? _error;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final List<DiscoveredTool> tools = await widget.discovery.discover();
+      if (!mounted) return;
+      setState(() {
+        _tools = tools;
+        _loading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Ferramentas deste computador'),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const Text(
+              'A detecção consulta apenas executáveis acessíveis no PATH. '
+              'Tokens, keychains e arquivos de credenciais não são lidos.',
+              style: TextStyle(fontSize: 12, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            if (_loading && _tools.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_error != null)
+              _ToolInventoryError(error: _error!, onRetry: _refresh)
+            else ...<Widget>[
+              for (final DiscoveredTool tool in _tools)
+                _ToolInventoryRow(tool: tool),
+              if (_loading) const LinearProgressIndicator(minHeight: 2),
+            ],
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton.icon(
+          onPressed: _loading ? null : _refresh,
+          icon: const Icon(Icons.refresh, size: 16),
+          label: const Text('ATUALIZAR'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('FECHAR'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ToolInventoryRow extends StatelessWidget {
+  const _ToolInventoryRow({required this.tool});
+
+  final DiscoveredTool tool;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool available = tool.availability == ToolAvailability.available;
+    final bool failed = tool.availability == ToolAvailability.probeError;
+    final Color color = available
+        ? FoundryColors.success
+        : failed
+            ? FoundryColors.orange
+            : FoundryColors.muted;
+    final String state = available
+        ? 'DETECTADA'
+        : failed
+            ? 'ERRO NO PROBE'
+            : 'NÃO INSTALADA';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            available
+                ? Icons.check_circle_outline
+                : failed
+                    ? Icons.warning_amber_outlined
+                    : Icons.radio_button_unchecked,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(child: Text(tool.definition.label)),
+                    Text(
+                      state,
+                      style: TextStyle(
+                        color: color,
+                        fontFamily: 'Consolas',
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tool.version ??
+                      (available
+                          ? tool.diagnostic ?? 'Executável acessível no PATH.'
+                          : 'Comando: ${tool.definition.executable}'),
+                  style: const TextStyle(
+                    color: FoundryColors.muted,
+                    fontSize: 11,
+                  ),
+                ),
+                if (!available && tool.definition.setupHint != null)
+                  Text(
+                    'Configuração manual: ${tool.definition.setupHint}',
+                    style: const TextStyle(
+                      color: FoundryColors.muted,
+                      fontFamily: 'Consolas',
+                      fontSize: 10,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolInventoryError extends StatelessWidget {
+  const _ToolInventoryError({required this.error, required this.onRetry});
+
+  final Object error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        const Icon(Icons.cloud_off_outlined, size: 28),
+        const SizedBox(height: 8),
+        const Text(
+          'Não foi possível consultar o gateway local.',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$error',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: FoundryColors.muted, fontSize: 11),
+        ),
+        const SizedBox(height: 10),
+        TextButton(onPressed: onRetry, child: const Text('TENTAR NOVAMENTE')),
+      ],
     );
   }
 }

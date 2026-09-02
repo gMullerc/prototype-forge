@@ -9,7 +9,10 @@ import 'package:prototype_local_gateway/infrastructure/opencode/opencode_api_cli
 import 'package:prototype_local_gateway/infrastructure/opencode/opencode_configuration.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/opencode_host.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/opencode_provider.dart';
+import 'package:prototype_local_gateway/infrastructure/tools/process_tool_probe.dart';
+import 'package:prototype_local_gateway/infrastructure/tools/tool_inventory.dart';
 import 'package:prototype_local_gateway/interface/http/local_gateway_server.dart';
+import 'package:prototype_tool_discovery/prototype_tool_discovery.dart';
 
 Future<void> main() async {
   final Map<String, String> environment = Platform.environment;
@@ -30,6 +33,9 @@ Future<void> main() async {
   );
   final PrototypeProviderRegistry providers =
       PrototypeProviderRegistry(<PrototypeProvider>[provider]);
+  final ToolInventory toolInventory = ToolInventory(
+    LocalToolDiscovery(probe: const ProcessToolProbe()),
+  );
   final Completer<void> done = Completer<void>();
   var closing = false;
   late final LocalGatewayServer server;
@@ -54,6 +60,7 @@ Future<void> main() async {
       contractBuilder: const PrototypeSpecContractBuilder(),
     ),
     providers: providers,
+    toolInventory: toolInventory,
     shutdownToken: environment['PROTOTYPE_GATEWAY_SHUTDOWN_TOKEN'],
     onShutdown: shutdown,
   );

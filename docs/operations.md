@@ -89,6 +89,13 @@ O Studio depende apenas da porta `PrototypeAgent`. Adicionar outro provedor
 deve ser uma implementação de infraestrutura e uma alteração na composition
 root, sem alterar o runtime ou o renderer.
 
+## Ferramentas locais detectadas
+
+O botão de ferramentas no cabeçalho consulta `GET /v1/tools` no gateway local.
+Essa consulta verifica apenas comandos registrados no `PATH` e suas versões.
+Uma ferramenta marcada como “detectada” ainda pode exigir login próprio antes
+de ser usada; o Prototype Foundry não lê nem armazena credenciais.
+
 ## Validação do repositório
 
 Para executar análise, testes e build Web:

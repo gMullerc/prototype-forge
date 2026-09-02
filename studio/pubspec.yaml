@@ -25,6 +25,8 @@ dependencies:
     path: ../foundry/packages/prototype_runtime
   prototype_spec:
     path: ../foundry/packages/prototype_spec
+  prototype_tool_discovery:
+    path: ../foundry/packages/prototype_tool_discovery
   prototype_workspace:
     path: ../foundry/packages/prototype_workspace
 

@@ -21,6 +21,7 @@ foundry/packages/prototype_agent/            Provider-neutral application port
 foundry/packages/prototype_export/           Provider-neutral export port
 foundry/packages/prototype_gateway_protocol/ Versioned local wire contract
 foundry/packages/prototype_gateway_client/   Transport-agnostic gateway adapter
+foundry/packages/prototype_tool_discovery/   Extensible local CLI inventory
 foundry/packages/prototype_material_exporter/ Deterministic Material draft exporter
 foundry/packages/prototype_workspace/         Local projects, revisions and comments
 foundry/services/local_gateway/              Local Dart service and OpenCode adapter
@@ -75,6 +76,11 @@ Run the complete analysis, test and Web build gate with:
 The Studio offers both a deterministic local agent and OpenCode. The gateway
 starts `opencode serve` on demand and reuses the OpenCode authorization already
 configured on the machine. No login or credential screen is part of the MVP.
+
+The header also exposes a local tool inventory. It detects registered CLI tools
+such as OpenCode, GitHub Copilot CLI, OpenAI Codex CLI, Claude Code, Gemini CLI
+and Aider through the local gateway. Detection checks executable presence and
+version only; it does not read or validate credentials.
 
 The default model is `openai/gpt-5.4-mini`. It can be replaced without changing
 the Studio:

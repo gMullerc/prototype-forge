@@ -13,6 +13,8 @@ dependencies:
     path: ../prototype_gateway_protocol
   prototype_runtime:
     path: ../prototype_runtime
+  prototype_tool_discovery:
+    path: ../prototype_tool_discovery
 
 dev_dependencies:
   test: ^1.25.8

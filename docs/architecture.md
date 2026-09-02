@@ -132,6 +132,19 @@ error code when that boundary is reached. The Studio can cancel its current
 request at any time; a late response is ignored and cannot replace a newer
 prototype state.
 
+### Local tool discovery
+
+The Flutter Web client cannot inspect the host operating system directly. The
+local gateway therefore exposes `GET /v1/tools`, backed by the independent
+`prototype_tool_discovery` contract. Its process adapter checks only registered
+executables through `where`/`which` and a bounded `--version` probe.
+
+The response reports tool presence and version for OpenCode, GitHub Copilot
+CLI, OpenAI Codex CLI, Claude Code, Gemini CLI and Aider. It deliberately does
+not inspect environment variables, keychains, credential files or tokens, and
+`credentialsChecked` remains `false`. Adding another tool means registering a
+new definition and, later, an adapter; the Studio and renderer do not change.
+
 ## Prototype request flow
 
 ```text

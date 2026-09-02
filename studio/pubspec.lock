@@ -194,6 +194,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  prototype_tool_discovery:
+    dependency: "direct main"
+    description:
+      path: "../foundry/packages/prototype_tool_discovery"
+      relative: true
+    source: path
+    version: "0.1.0"
   prototype_workspace:
     dependency: "direct main"
     description:

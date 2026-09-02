@@ -9,6 +9,8 @@ environment:
 dependencies:
   prototype_gateway_protocol:
     path: ../../packages/prototype_gateway_protocol
+  prototype_tool_discovery:
+    path: ../../packages/prototype_tool_discovery
 
 dev_dependencies:
   test: ^1.25.8

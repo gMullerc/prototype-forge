@@ -87,6 +87,21 @@ Exit criteria:
 - provider contract tests run against recorded fixtures;
 - errors identify provider, phase and remediation without exposing secrets.
 
+### 2.1 Detectar ferramentas locais sem assumir um provedor — primeira versão concluída
+
+Como o Studio é Flutter Web, a inspeção do computador acontece exclusivamente
+no gateway local. O gateway consulta uma lista registrada de CLIs usando
+`where`/`which` e `--version`, devolvendo somente presença, versão e capacidade
+declarada. A interface deixa claro que “detectada” não significa “autenticada”.
+
+A primeira versão reconhece OpenCode, GitHub Copilot CLI, OpenAI Codex CLI,
+Claude Code, Gemini CLI e Aider. A lista é extensível por definições, sem
+alterar o contrato, o renderer ou a sessão do Studio.
+
+Não são lidos tokens, variáveis de ambiente, keychains nem arquivos de
+credenciais. A conexão real com cada CLI continua sendo uma etapa posterior,
+com um adapter próprio e permissões explícitas.
+
 ### 3. Integrate the company design system
 
 Build a catalog package in the company monorepo that maps Prototype Spec types

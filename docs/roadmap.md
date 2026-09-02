@@ -19,6 +19,7 @@
 - session lifecycle and UI cancellation with late-response protection
 - malformed-response repair request
 - local diagnostics for OpenCode invocation failures
+- local inventory of installed agent CLIs without credential inspection
 
 ## Milestone 3 — Company design system
 

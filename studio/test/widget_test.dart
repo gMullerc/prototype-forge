@@ -4,6 +4,7 @@ import 'package:prototype_agent/prototype_agent.dart';
 import 'package:prototype_material_catalog/prototype_material_catalog.dart';
 import 'package:prototype_material_exporter/prototype_material_exporter.dart';
 import 'package:prototype_runtime/prototype_runtime.dart';
+import 'package:prototype_tool_discovery/prototype_tool_discovery.dart';
 import 'package:prototype_workspace/prototype_workspace.dart';
 import 'package:prototype_foundry_studio/app/foundry_app.dart';
 import 'package:prototype_foundry_studio/application/studio_session.dart';
@@ -110,6 +111,7 @@ void main() {
       exporter: const MaterialDraftExporter(),
     );
     final _MemoryWorkspaceTransfer transfer = _MemoryWorkspaceTransfer();
+    final _MemoryToolDiscovery toolDiscovery = _MemoryToolDiscovery();
     addTearDown(session.dispose);
     await session.initialize();
 
@@ -120,9 +122,18 @@ void main() {
           session: session,
           catalog: catalog,
           workspaceTransfer: transfer,
+          toolDiscovery: toolDiscovery,
         ),
       ),
     );
+    await tester.tap(find.byKey(const Key('tool-discovery-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Ferramentas deste computador'), findsOneWidget);
+    expect(find.text('OpenCode'), findsOneWidget);
+    expect(find.text('DETECTADA'), findsOneWidget);
+    await tester.tap(find.text('FECHAR'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const Key('workspace-menu')));
     await tester.pumpAndSettle();
     expect(find.text('Exportar backup'), findsOneWidget);
@@ -156,6 +167,31 @@ class _MemoryWorkspaceTransfer implements WorkspaceTransfer {
 
   @override
   Future<String?> pickText() async => source;
+}
+
+class _MemoryToolDiscovery implements ToolDiscovery {
+  @override
+  Future<List<DiscoveredTool>> discover() async => <DiscoveredTool>[
+        const DiscoveredTool(
+          definition: ToolDefinition(
+            id: 'opencode',
+            label: 'OpenCode',
+            executable: 'opencode',
+            capabilities: <String>['agent', 'prototype-generation'],
+          ),
+          availability: ToolAvailability.available,
+          version: '1.18.26',
+        ),
+        const DiscoveredTool(
+          definition: ToolDefinition(
+            id: 'codex-cli',
+            label: 'OpenAI Codex CLI',
+            executable: 'codex',
+            capabilities: <String>['agent'],
+          ),
+          availability: ToolAvailability.notFound,
+        ),
+      ];
 }
 
 class _MemoryRepository implements PrototypeProjectRepository {

@@ -1,6 +1,7 @@
 const String gatewayProtocolVersion = '1';
 const String gatewayHealthPath = '/v1/health';
 const String gatewayGeneratePath = '/v1/generate';
+const String gatewayToolsPath = '/v1/tools';
 
 class GatewayProtocolException implements FormatException {
   const GatewayProtocolException(this.message, [this.source, this.offset]);
