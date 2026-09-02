@@ -42,6 +42,16 @@ void main() {
       (promptBody['format'] as Map<String, Object?>)['schema'],
       containsPair('type', 'object'),
     );
+    final Map<String, Object?> transportSchema = (promptBody['format']
+        as Map<String, Object?>)['schema']! as Map<String, Object?>;
+    expect(
+      transportSchema['properties'],
+      containsPair('specVersion', containsPair('type', 'string')),
+    );
+    expect(
+      transportSchema['properties'],
+      containsPair('screen', containsPair('type', 'object')),
+    );
     expect(
       (promptBody['format'] as Map<String, Object?>)['retryCount'],
       2,
