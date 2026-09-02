@@ -260,6 +260,8 @@ class StudioSession {
           'O agente ${agent.label} excedeu o tempo limite. Tente um briefing menor ou cancele e gere novamente.',
         'provider_response_invalid' =>
           'O agente ${agent.label} respondeu, mas o contrato não passou na validação automática. Tente novamente com uma descrição mais específica.',
+        'provider_not_authenticated' =>
+          'O agente ${agent.label} está instalado, mas não está autenticado. Faça login no próprio CLI e tente novamente.',
         'provider_failure' =>
           'O agente ${agent.label} encontrou um erro durante a geração. Verifique o serviço e tente novamente.',
         _ =>

@@ -72,8 +72,8 @@ Exit criteria:
 
 ### 2. Connect OpenCode without coupling it to the core
 
-Create a separate `prototype_opencode_adapter` package and a local gateway.
-The adapter receives a catalog prompt, returns raw Prototype Spec JSON and owns
+Create separate provider adapters and a local gateway. The adapters receive a
+catalog prompt, return raw Prototype Spec JSON and own
 timeouts, cancellation, diagnostics and one repair attempt. The gateway invokes
 the OpenCode installation and session already authorized on the PM machine. The
 Studio only depends on `PrototypeAgent`; it does not ask for, store or manage an
@@ -101,6 +101,12 @@ alterar o contrato, o renderer ou a sessão do Studio.
 Não são lidos tokens, variáveis de ambiente, keychains nem arquivos de
 credenciais. A conexão real com cada CLI continua sendo uma etapa posterior,
 com um adapter próprio e permissões explícitas.
+
+O primeiro adapter adicional é o Copilot CLI. Ele usa o modo programático
+`copilot -p`, mantém a saída como texto até o parser extrair um único objeto
+JSON e traduz falhas de autenticação, timeout e resposta inválida para códigos
+neutros do gateway. A seleção do Copilot já está disponível no Studio; a
+autenticação continua sendo feita pelo usuário no CLI instalado.
 
 ### 3. Integrate the company design system
 

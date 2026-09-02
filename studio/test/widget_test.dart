@@ -44,6 +44,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('agent-selector')));
     await tester.pumpAndSettle();
+    expect(find.text('Copilot CLI'), findsOneWidget);
     await tester.tap(find.text('OpenCode'));
     await tester.pumpAndSettle();
 

@@ -73,9 +73,11 @@ Run the complete analysis, test and Web build gate with:
 .\check.ps1
 ```
 
-The Studio offers both a deterministic local agent and OpenCode. The gateway
-starts `opencode serve` on demand and reuses the OpenCode authorization already
-configured on the machine. No login or credential screen is part of the MVP.
+The Studio offers a deterministic local agent, OpenCode and Copilot CLI. The
+gateway starts `opencode serve` on demand and reuses the OpenCode authorization
+already configured on the machine. The Copilot adapter runs `copilot -p` in a
+restricted process and does not write to the repository. No login or credential
+screen is part of the MVP.
 
 The header also exposes a local tool inventory. It detects registered CLI tools
 such as OpenCode, GitHub Copilot CLI, OpenAI Codex CLI, Claude Code, Gemini CLI

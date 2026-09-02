@@ -46,6 +46,13 @@ class _FoundryAppState extends State<FoundryApp> {
         transport: _gatewayTransport,
         catalog: _catalog.runtimeCatalog,
       ),
+      GatewayPrototypeAgent(
+        id: 'copilot',
+        label: 'Copilot CLI',
+        providerId: 'copilot',
+        transport: _gatewayTransport,
+        catalog: _catalog.runtimeCatalog,
+      ),
     ],
     initialAgentId: 'local-contract',
     engine: PrototypeEngine(

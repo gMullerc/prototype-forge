@@ -66,6 +66,9 @@ As variáveis abaixo alteram a execução sem editar o código:
 | `PROTOTYPE_OPENCODE_EXECUTABLE` | executável alternativo do OpenCode |
 | `PROTOTYPE_OPENCODE_MODEL` | modelo no formato `provider/model` |
 | `PROTOTYPE_OPENCODE_VARIANT` | variante de raciocínio do modelo |
+| `PROTOTYPE_COPILOT_EXECUTABLE` | executável alternativo do Copilot CLI |
+| `PROTOTYPE_COPILOT_MODEL` | modelo opcional do Copilot CLI |
+| `PROTOTYPE_COPILOT_TIMEOUT_SECONDS` | limite da geração do Copilot CLI |
 | `PROTOTYPE_WORKSPACE` | diretório de trabalho isolado do OpenCode |
 
 Exemplo no PowerShell:
@@ -84,6 +87,7 @@ usada em um fluxo explícito de manutenção.
 - `deterministic`: fixture local para desenvolvimento, testes e demonstração
   sem depender de processo externo;
 - `opencode`: integração via gateway, usando a sessão autorizada do OpenCode.
+- `copilot`: integração via gateway, usando o modo programático do Copilot CLI.
 
 O Studio depende apenas da porta `PrototypeAgent`. Adicionar outro provedor
 deve ser uma implementação de infraestrutura e uma alteração na composition

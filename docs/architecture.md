@@ -126,6 +126,12 @@ Local Dart service and composition root for provider adapters. Its application
 use case knows `PrototypeProvider`, while only the OpenCode infrastructure
 adapter knows the OpenCode HTTP API or process lifecycle.
 
+The Copilot adapter is a separate process-based provider. It uses the CLI's
+programmatic prompt mode, translates the text response into the neutral
+provider output and never lets Copilot tools reach the preview. Its process
+runner denies shell, read, write, URL and memory capabilities, and disables the
+built-in MCP server for the generation session.
+
 Generation requests have an explicit timeout boundary. The gateway defaults to
 90 seconds per OpenCode generation and returns the stable `provider_timeout`
 error code when that boundary is reached. The Studio can cancel its current

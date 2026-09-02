@@ -4,6 +4,10 @@ import 'dart:io';
 import 'package:prototype_local_gateway/application/generate_prototype.dart';
 import 'package:prototype_local_gateway/application/prototype_contract_builder.dart';
 import 'package:prototype_local_gateway/domain/prototype_provider.dart';
+import 'package:prototype_local_gateway/infrastructure/copilot/copilot_cli_client.dart';
+import 'package:prototype_local_gateway/infrastructure/copilot/copilot_configuration.dart';
+import 'package:prototype_local_gateway/infrastructure/copilot/copilot_process_runner.dart';
+import 'package:prototype_local_gateway/infrastructure/copilot/copilot_provider.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/json_http_transport.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/opencode_api_client.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/opencode_configuration.dart';
@@ -31,8 +35,15 @@ Future<void> main() async {
       transport: transport,
     ),
   );
+  final DartCopilotProcessRunner copilotRunner = DartCopilotProcessRunner();
+  final CopilotPrototypeProvider copilot = CopilotPrototypeProvider(
+    client: CopilotCliClient(
+      configuration: CopilotConfiguration.fromEnvironment(environment),
+      runner: copilotRunner,
+    ),
+  );
   final PrototypeProviderRegistry providers =
-      PrototypeProviderRegistry(<PrototypeProvider>[provider]);
+      PrototypeProviderRegistry(<PrototypeProvider>[provider, copilot]);
   final ToolInventory toolInventory = ToolInventory(
     LocalToolDiscovery(probe: const ProcessToolProbe()),
   );
