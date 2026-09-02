@@ -79,14 +79,61 @@ class CopilotCliClient {
       throw _invalidResponse();
     }
     try {
+      final String conversationId = input.conversationId ??
+          'copilot-${DateTime.now().microsecondsSinceEpoch}';
+      final ProviderGenerationOutput decoded = _decodeTurn(output);
       return ProviderGenerationOutput(
-        conversationId: input.conversationId ??
-            'copilot-${DateTime.now().microsecondsSinceEpoch}',
-        document: _decodeDocument(output),
+        conversationId: conversationId,
+        document: decoded.document,
+        clarification: decoded.clarification,
       );
     } on Object {
       throw _invalidResponse();
     }
+  }
+
+  ProviderGenerationOutput _decodeTurn(String output) {
+    final String normalized = _normalizeTextJson(output);
+    final Object? decoded = jsonDecode(normalized);
+    if (decoded is! Map) {
+      throw const FormatException('A resposta não é um objeto JSON.');
+    }
+    final Map<String, Object?> value = <String, Object?>{
+      for (final MapEntry<Object?, Object?> entry in decoded.entries)
+        if (entry.key is String) entry.key! as String: entry.value,
+    };
+    if (value['type'] == 'clarification') {
+      final Object? question = value['question'];
+      final Object? options = value['options'];
+      if (question is! String || question.trim().isEmpty) {
+        throw const FormatException('Pergunta inválida.');
+      }
+      if (options != null &&
+          (options is! List ||
+              options.any((Object? option) => option is! String))) {
+        throw const FormatException('Opções inválidas.');
+      }
+      final List<String> questionOptions = options == null
+          ? const <String>[]
+          : (options as List<Object?>).cast<String>();
+      return ProviderGenerationOutput.clarification(
+        conversationId: '',
+        question: question,
+        options: questionOptions,
+      );
+    }
+    final Object? rawDocument =
+        value['type'] == 'contract' ? value['document'] : value;
+    if (rawDocument is! Map) {
+      throw const FormatException('Contrato inválido.');
+    }
+    return ProviderGenerationOutput(
+      conversationId: '',
+      document: <String, Object?>{
+        for (final MapEntry<Object?, Object?> entry in rawDocument.entries)
+          if (entry.key is String) entry.key! as String: entry.value,
+      },
+    );
   }
 
   List<String> _generationArguments(ProviderGenerationInput input) {
@@ -142,18 +189,6 @@ ${jsonEncode(input.outputSchema)}
       message:
           'O Copilot CLI respondeu, mas não produziu um contrato JSON válido.',
     );
-  }
-
-  Map<String, Object?> _decodeDocument(String output) {
-    final String normalized = _normalizeTextJson(output);
-    final Object? decoded = jsonDecode(normalized);
-    if (decoded is! Map<Object?, Object?>) {
-      throw const FormatException('O contrato não é um objeto JSON.');
-    }
-    return <String, Object?>{
-      for (final MapEntry<Object?, Object?> entry in decoded.entries)
-        if (entry.key is String) entry.key! as String: entry.value,
-    };
   }
 
   String _normalizeTextJson(String text) {

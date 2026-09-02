@@ -106,6 +106,78 @@ void main() {
     expect(received?.componentId, 'transaction');
   });
 
+  testWidgets('edits values, validates and toggles conditional components', (
+    WidgetTester tester,
+  ) async {
+    const String source = '''
+{
+  "specVersion": "1.1",
+  "interaction": {
+    "initialState": {"name": "", "employee": false, "salary": ""},
+    "actions": [
+      {"name": "employee_yes", "effects": [{"type": "setValue", "key": "employee", "value": true}]},
+      {"name": "employee_no", "effects": [{"type": "setValue", "key": "employee", "value": false}]},
+      {"name": "save", "effects": [{"type": "validate"}, {"type": "showMessage", "tone": "success", "message": "Cadastro salvo."}]}
+    ]
+  },
+  "screen": {
+    "id": "person",
+    "title": "Cadastro",
+    "root": {
+      "id": "root",
+      "type": "Column",
+      "children": [
+        {"id": "name", "type": "TextField", "props": {"label": "Nome"}, "interaction": {"valueKey": "name", "required": true}},
+        {"id": "yes", "type": "Button", "props": {"label": "Sim", "action": "employee_yes"}, "interaction": {"selectedWhen": {"key": "employee", "equals": true}}},
+        {"id": "no", "type": "Button", "props": {"label": "Não", "action": "employee_no"}, "interaction": {"selectedWhen": {"key": "employee", "equals": false}}},
+        {"id": "employee-fields", "type": "Column", "interaction": {"visibleWhen": {"key": "employee", "equals": true}}, "children": [
+          {"id": "salary", "type": "TextField", "props": {"label": "Salário", "keyboard": "number"}, "interaction": {"valueKey": "salary", "required": true}}
+        ]},
+        {"id": "save", "type": "Button", "props": {"label": "Salvar", "action": "save"}}
+      ]
+    }
+  }
+}
+''';
+    final FlutterPrototypeCatalog catalog = createMaterialPrototypeCatalog();
+    final PrototypeSnapshot snapshot =
+        PrototypeEngine(catalog: catalog.runtimeCatalog).load(source);
+
+    expect(snapshot.status, PrototypeStatus.ready);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PrototypeSurface(
+              document: snapshot.document!,
+              catalog: catalog,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Salário'), findsNothing);
+    await tester.enterText(find.byType(TextFormField), 'Maria');
+    await tester.tap(find.text('Sim'));
+    await tester.pump();
+    expect(find.text('Salário'), findsOneWidget);
+
+    await tester.tap(find.text('Salvar'));
+    await tester.pump();
+    expect(find.text('Campo obrigatório.'), findsOneWidget);
+
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Salário'), '5000');
+    await tester.tap(find.text('Salvar'));
+    await tester.pump();
+    expect(find.text('Cadastro salvo.'), findsOneWidget);
+
+    await tester.tap(find.text('Não'));
+    await tester.pump();
+    expect(find.text('Salário'), findsNothing);
+  });
+
   test('accepts additional factories without changing the Material catalog',
       () {
     final FlutterComponentFactory customFactory = FlutterComponentFactory(

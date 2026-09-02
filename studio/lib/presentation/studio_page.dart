@@ -56,6 +56,7 @@ class _StudioPageState extends State<StudioPage> {
   late StudioState _state = widget.session.current;
   StreamSubscription<StudioState>? _subscription;
   _PreviewViewport _viewport = _PreviewViewport.phone;
+  PrototypeSurfaceMode _surfaceMode = PrototypeSurfaceMode.interactive;
   late final WorkspaceTransfer _workspaceTransfer =
       widget.workspaceTransfer ?? createWorkspaceTransfer();
 
@@ -176,8 +177,12 @@ class _StudioPageState extends State<StudioPage> {
               padding: const EdgeInsets.all(18),
               itemCount: _state.messages.length,
               separatorBuilder: (_, __) => const SizedBox(height: 14),
-              itemBuilder: (BuildContext context, int index) =>
-                  _MessageCard(message: _state.messages[index]),
+              itemBuilder: (BuildContext context, int index) => _MessageCard(
+                message: _state.messages[index],
+                onOptionSelected: (String option) {
+                  widget.session.sendPrompt(option);
+                },
+              ),
             ),
           ),
           Padding(
@@ -262,11 +267,14 @@ class _StudioPageState extends State<StudioPage> {
           const Divider(height: 1, color: FoundryColors.ink),
           _CanvasToolbar(
             viewport: _viewport,
+            mode: _surfaceMode,
             canReview: _state.activeProject?.revisions.isNotEmpty ?? false,
             canExport: _state.snapshot.status == PrototypeStatus.ready,
             canViewContract: _state.snapshot.rawResponse.isNotEmpty,
             onViewportChanged: (_PreviewViewport value) =>
                 setState(() => _viewport = value),
+            onModeChanged: (PrototypeSurfaceMode value) =>
+                setState(() => _surfaceMode = value),
             onReview: _showReviewWorkspace,
             onExport: _showExport,
             onViewContract: _showContract,
@@ -279,7 +287,7 @@ class _StudioPageState extends State<StudioPage> {
               child: Center(child: _buildSurfaceState()),
             ),
           ),
-          _CanvasFooter(state: _state),
+          _CanvasFooter(state: _state, mode: _surfaceMode),
         ],
       ),
     );
@@ -293,6 +301,15 @@ class _StudioPageState extends State<StudioPage> {
         title: 'Compondo o contrato…',
         description:
             'O motor está organizando componentes e propriedades. Toque no botão laranja para cancelar.',
+      );
+    }
+    if (_state.status == StudioGenerationStatus.awaitingClarification &&
+        snapshot.document == null) {
+      return const _EmptyCanvas(
+        icon: Icons.forum_outlined,
+        title: 'Aguardando sua resposta',
+        description:
+            'Responda à pergunta no briefing para que o agente conclua a composição.',
       );
     }
     if (snapshot.status == PrototypeStatus.invalid) {
@@ -346,11 +363,14 @@ class _StudioPageState extends State<StudioPage> {
               child: PrototypeSurface(
                 document: snapshot.document!,
                 catalog: widget.catalog,
+                mode: _surfaceMode,
                 onAction: (PrototypeActionEvent event) {
-                  widget.session.recordAction(
-                    name: event.name,
-                    componentId: event.componentId,
-                  );
+                  if (_surfaceMode == PrototypeSurfaceMode.inspect) {
+                    widget.session.recordAction(
+                      name: event.name,
+                      componentId: event.componentId,
+                    );
+                  }
                 },
               ),
             ),
@@ -658,20 +678,24 @@ class _ProjectBar extends StatelessWidget {
 class _CanvasToolbar extends StatelessWidget {
   const _CanvasToolbar({
     required this.viewport,
+    required this.mode,
     required this.canReview,
     required this.canExport,
     required this.canViewContract,
     required this.onViewportChanged,
+    required this.onModeChanged,
     required this.onReview,
     required this.onExport,
     required this.onViewContract,
   });
 
   final _PreviewViewport viewport;
+  final PrototypeSurfaceMode mode;
   final bool canReview;
   final bool canExport;
   final bool canViewContract;
   final ValueChanged<_PreviewViewport> onViewportChanged;
+  final ValueChanged<PrototypeSurfaceMode> onModeChanged;
   final VoidCallback onReview;
   final VoidCallback onExport;
   final VoidCallback onViewContract;
@@ -707,6 +731,34 @@ class _CanvasToolbar extends StatelessWidget {
             const SizedBox(width: 10),
             Container(width: 1, height: 22, color: FoundryColors.line),
             const SizedBox(width: 8),
+            const Text(
+              'MODO',
+              style: TextStyle(
+                fontFamily: 'Consolas',
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                color: FoundryColors.muted,
+              ),
+            ),
+            const SizedBox(width: 7),
+            _SurfaceModeButton(
+              key: const Key('surface-mode-interactive'),
+              label: 'INTERAGIR',
+              icon: Icons.touch_app_outlined,
+              selected: mode == PrototypeSurfaceMode.interactive,
+              onPressed: () => onModeChanged(PrototypeSurfaceMode.interactive),
+            ),
+            const SizedBox(width: 4),
+            _SurfaceModeButton(
+              key: const Key('surface-mode-inspect'),
+              label: 'INSPECIONAR',
+              icon: Icons.manage_search_outlined,
+              selected: mode == PrototypeSurfaceMode.inspect,
+              onPressed: () => onModeChanged(PrototypeSurfaceMode.inspect),
+            ),
+            const SizedBox(width: 10),
+            Container(width: 1, height: 22, color: FoundryColors.line),
+            const SizedBox(width: 8),
             TextButton.icon(
               onPressed: canReview ? onReview : null,
               icon: const Icon(Icons.compare_outlined, size: 16),
@@ -726,6 +778,36 @@ class _CanvasToolbar extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SurfaceModeButton extends StatelessWidget {
+  const _SurfaceModeButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: selected ? FoundryColors.ink : Colors.transparent,
+        foregroundColor: selected ? Colors.white : FoundryColors.ink,
+        side: const BorderSide(color: FoundryColors.ink),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+      ),
+      icon: Icon(icon, size: 14),
+      label: Text(label, style: const TextStyle(fontSize: 10)),
     );
   }
 }
@@ -835,7 +917,7 @@ class _Header extends StatelessWidget {
           ),
           const Spacer(),
           if (MediaQuery.of(context).size.width > 700) ...<Widget>[
-            const _Stamp(label: 'SPEC 1.0', color: FoundryColors.blue),
+            const _Stamp(label: 'SPEC 1.1', color: FoundryColors.blue),
             const SizedBox(width: 8),
             _Stamp(label: agentLabel.toUpperCase(), color: FoundryColors.ink),
             const SizedBox(width: 8),
@@ -1217,9 +1299,13 @@ class _PanelHeading extends StatelessWidget {
 }
 
 class _MessageCard extends StatelessWidget {
-  const _MessageCard({required this.message});
+  const _MessageCard({
+    required this.message,
+    required this.onOptionSelected,
+  });
 
   final StudioMessage message;
+  final ValueChanged<String> onOptionSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1249,13 +1335,41 @@ class _MessageCard extends StatelessWidget {
             bottomRight: Radius.circular(user ? 14 : 3),
           ),
         ),
-        child: Text(
-          message.text,
-          style: TextStyle(
-            color: user ? Colors.white : FoundryColors.ink,
-            fontSize: 13,
-            height: 1.4,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              message.text,
+              style: TextStyle(
+                color: user ? Colors.white : FoundryColors.ink,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            if (message.options.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: <Widget>[
+                  for (final String option in message.options)
+                    OutlinedButton(
+                      onPressed: () => onOptionSelected(option),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: FoundryColors.ink,
+                        side: const BorderSide(color: FoundryColors.ink),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        textStyle: const TextStyle(fontSize: 11),
+                      ),
+                      child: Text(option),
+                    ),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -1286,9 +1400,10 @@ class _Suggestion extends StatelessWidget {
 }
 
 class _CanvasFooter extends StatelessWidget {
-  const _CanvasFooter({required this.state});
+  const _CanvasFooter({required this.state, required this.mode});
 
   final StudioState state;
+  final PrototypeSurfaceMode mode;
 
   @override
   Widget build(BuildContext context) {
@@ -1301,10 +1416,14 @@ class _CanvasFooter extends StatelessWidget {
         children: <Widget>[
           const Icon(Icons.lock_outline, size: 14),
           const SizedBox(width: 6),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Somente componentes registrados · nenhuma execução de código',
-              style: TextStyle(fontSize: 10),
+              state.status == StudioGenerationStatus.awaitingClarification
+                  ? 'Aguardando resposta do briefing'
+                  : mode == PrototypeSurfaceMode.interactive
+                      ? 'Interação declarativa local · nenhuma execução de código'
+                      : 'Inspeção de eventos · nenhuma execução de código',
+              style: const TextStyle(fontSize: 10),
             ),
           ),
           Text(
@@ -1399,11 +1518,12 @@ class _StatusMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool working = status == StudioGenerationStatus.generating;
+    final bool waiting = status == StudioGenerationStatus.awaitingClarification;
     final bool failed = status == StudioGenerationStatus.failed ||
         status == StudioGenerationStatus.invalid;
     final Color color = failed
         ? FoundryColors.orange
-        : working
+        : working || waiting
             ? FoundryColors.blue
             : FoundryColors.success;
     return Container(

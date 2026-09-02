@@ -50,7 +50,9 @@ tokens, estados e ações que podem aparecer.
 4. O agente devolve um Prototype Spec JSON.
 5. O Foundry valida o contrato contra o catálogo ativo.
 6. Se aprovado, o Studio renderiza o protótipo.
-7. Se rejeitado, o Studio apresenta causa, componente, propriedade, caminho
+7. Em contratos 1.1, o PM preenche campos e executa interações declarativas
+   inteiramente locais.
+8. Se rejeitado, o Studio apresenta causa, componente, propriedade, caminho
    técnico e próxima ação sugerida.
 
 ## O que fica dentro do MVP
@@ -65,6 +67,7 @@ tokens, estados e ações que podem aparecer.
 - integração OpenCode por um gateway local;
 - histórico de conversa enquanto a sessão estiver aberta;
 - feedback de rejeição de contrato que o PM consiga entender.
+- interação local com campos, seleção, condições e validações declarativas.
 
 ## O que fica fora do MVP
 
@@ -93,9 +96,10 @@ regra de negócio do Foundry.
 
 ### Segurança por redução de capacidade
 
-O preview só conhece factories registradas, propriedades validadas e ações
-inertes. Quanto menos capacidade o contrato concede, menor a superfície para
-um output incorreto ou malicioso.
+O preview só conhece factories registradas, propriedades validadas e uma lista
+fechada de efeitos locais. O contrato não concede acesso a funções, rede,
+arquivos ou processos. Quanto menos capacidade o contrato concede, menor a
+superfície para um output incorreto ou malicioso.
 
 ### Feedback orientado à ação
 

@@ -16,6 +16,7 @@ O fluxo é contract-first:
 ```text
 brief do PM
   -> agente local (determinístico ou OpenCode)
+  -> perguntas de esclarecimento, quando necessárias
   -> Prototype Spec JSON versionado
   -> decoder e validator
   -> snapshot aprovado ou diagnóstico acionável
@@ -31,6 +32,7 @@ executados no preview.
 - Flutter Web, com baseline Flutter 3.24 e Dart 3.5;
 - OpenCode como primeiro provedor externo, usando a sessão já autorizada no
   computador;
+- diálogo opcional com perguntas curtas antes de aprovar o contrato;
 - gateway local em loopback para isolar a integração com o provedor;
 - catálogo Material público como fixture de desenvolvimento;
 - renderer seguro baseado em componentes registrados;
@@ -65,6 +67,7 @@ decisão de produto posterior, não uma dependência escondida no MVP.
 | Projetos | Persistir revisões e comentários por uma porta local substituível | [ADR 0006](adr/0006-local-workspace-port.md) |
 | Exportação | Manter exporters específicos de catálogo atrás de uma porta neutra | [ADR 0007](adr/0007-catalog-specific-exporters.md) |
 | Design system | Catálogos plug-and-play, substituídos na composition root | [Arquitetura](architecture.md#design-system-adapters) |
+| Conversa | Turno neutro de esclarecimento ou contrato, preservando adapters legados | [ADR 0009](adr/0009-conversational-generation-turns.md) |
 
 ## Organização do monorepo
 

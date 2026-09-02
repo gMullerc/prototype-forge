@@ -423,6 +423,8 @@ Widget _buildButton(PrototypeRenderContext context, PrototypeNode node) {
       final String label = node.props['label']! as String;
       final String style = node.props['style'] as String? ?? 'primary';
       final String? iconName = node.props['icon'] as String?;
+      final bool hasSelection = node.interaction?.selectedWhen != null;
+      final bool selected = hasSelection && context.isSelected(node);
       final Widget child = Wrap(
         alignment: WrapAlignment.center,
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -443,6 +445,12 @@ Widget _buildButton(PrototypeRenderContext context, PrototypeNode node) {
         );
       };
 
+      if (selected) {
+        return FilledButton(onPressed: onPressed, child: child);
+      }
+      if (hasSelection) {
+        return OutlinedButton(onPressed: onPressed, child: child);
+      }
       return switch (style) {
         'secondary' => OutlinedButton(onPressed: onPressed, child: child),
         'quiet' => TextButton(onPressed: onPressed, child: child),
@@ -520,9 +528,10 @@ Widget _buildBadge(PrototypeRenderContext context, PrototypeNode node) {
 
 Widget _buildTextField(PrototypeRenderContext context, PrototypeNode node) {
   final String keyboard = node.props['keyboard'] as String? ?? 'text';
-  return TextFormField(
-    initialValue: node.props['value'] as String?,
-    readOnly: true,
+  return _InteractiveTextField(
+    key: ValueKey<String>('prototype-field-${node.id}'),
+    value: context.valueFor(node)?.toString() ?? '',
+    readOnly: !context.isInteractive || node.interaction?.valueKey == null,
     obscureText: keyboard == 'password',
     keyboardType: switch (keyboard) {
       'email' => TextInputType.emailAddress,
@@ -530,12 +539,79 @@ Widget _buildTextField(PrototypeRenderContext context, PrototypeNode node) {
       'password' => TextInputType.visiblePassword,
       _ => TextInputType.text,
     },
-    decoration: InputDecoration(
-      labelText: node.props['label']! as String,
-      hintText: node.props['placeholder'] as String?,
-      helperText: node.props['helper'] as String?,
-    ),
+    label: node.props['label']! as String,
+    placeholder: node.props['placeholder'] as String?,
+    helper: node.props['helper'] as String?,
+    error: context.errorFor(node),
+    onChanged: (String value) => context.updateValue(node, value),
   );
+}
+
+class _InteractiveTextField extends StatefulWidget {
+  const _InteractiveTextField({
+    super.key,
+    required this.value,
+    required this.readOnly,
+    required this.obscureText,
+    required this.keyboardType,
+    required this.label,
+    required this.onChanged,
+    this.placeholder,
+    this.helper,
+    this.error,
+  });
+
+  final String value;
+  final bool readOnly;
+  final bool obscureText;
+  final TextInputType keyboardType;
+  final String label;
+  final String? placeholder;
+  final String? helper;
+  final String? error;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_InteractiveTextField> createState() => _InteractiveTextFieldState();
+}
+
+class _InteractiveTextFieldState extends State<_InteractiveTextField> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.value);
+
+  @override
+  void didUpdateWidget(covariant _InteractiveTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != _controller.text) {
+      _controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: _controller,
+      readOnly: widget.readOnly,
+      obscureText: widget.obscureText,
+      keyboardType: widget.keyboardType,
+      onChanged: widget.readOnly ? null : widget.onChanged,
+      decoration: InputDecoration(
+        labelText: widget.label,
+        hintText: widget.placeholder,
+        helperText: widget.error == null ? widget.helper : null,
+        errorText: widget.error,
+      ),
+    );
+  }
 }
 
 Widget _buildNotice(PrototypeRenderContext context, PrototypeNode node) {

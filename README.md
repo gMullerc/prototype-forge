@@ -14,6 +14,7 @@ or runtime dependency on either implementation.
 
 ```text
 foundry/packages/prototype_spec/             Pure Dart JSON contract and decoder
+foundry/packages/prototype_interaction/      Pure Dart state, effects and form validation
 foundry/packages/prototype_runtime/          Validation and engine
 foundry/packages/prototype_flutter/          Flutter renderer and event bridge
 foundry/packages/prototype_material_catalog/ Material fixture catalog (14 components)
@@ -79,16 +80,23 @@ already configured on the machine. The Copilot adapter runs `copilot -p` in a
 restricted process and does not write to the repository. No login or credential
 screen is part of the MVP.
 
+Prototype Spec 1.1 adds an allowlisted local interaction runtime. Generated
+fields can be edited, options can update state, conditional regions can appear
+or disappear, and submit actions can validate CPF, CNPJ, minimum age and
+required values. The canvas starts in `Interagir` mode and can switch to
+`Inspecionar` when the PM wants actions recorded in the conversation. Existing
+Prototype Spec 1.0 revisions remain readable and static.
+
 The header also exposes a local tool inventory. It detects registered CLI tools
 such as OpenCode, GitHub Copilot CLI, OpenAI Codex CLI, Claude Code, Gemini CLI
 and Aider through the local gateway. Detection checks executable presence and
 version only; it does not read or validate credentials.
 
-The default model is `openai/gpt-5.4-mini`. It can be replaced without changing
+The default model is `openai/gpt-5.6-luna`. It can be replaced without changing
 the Studio:
 
 ```powershell
-$env:PROTOTYPE_OPENCODE_MODEL = 'openai/gpt-5.4'
+$env:PROTOTYPE_OPENCODE_MODEL = 'openai/gpt-5.6-luna'
 .\run-local.ps1
 ```
 

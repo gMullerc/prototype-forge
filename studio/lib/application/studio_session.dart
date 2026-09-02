@@ -12,6 +12,7 @@ import '../domain/studio_message.dart';
 enum StudioGenerationStatus {
   idle,
   generating,
+  awaitingClarification,
   ready,
   invalid,
   failed,
@@ -37,7 +38,7 @@ class StudioState {
           StudioMessage(
             role: StudioMessageRole.assistant,
             text:
-                'Descreva uma hipótese de produto. Eu vou compor uma tela usando apenas o contrato aprovado.',
+                'Descreva uma hipótese de produto. Vou entender o contexto com você e compor uma tela usando apenas o contrato aprovado.',
           ),
         ],
         snapshot: const PrototypeSnapshot.idle(),
@@ -93,6 +94,13 @@ class StudioState {
       workspaceReady: workspaceReady ?? this.workspaceReady,
     );
   }
+}
+
+class _ContractEvaluation {
+  const _ContractEvaluation({required this.snapshot, this.repaired = false});
+
+  final PrototypeSnapshot snapshot;
+  final bool repaired;
 }
 
 class StudioSession {
@@ -209,11 +217,35 @@ class StudioSession {
     );
 
     try {
-      final String response = await agent.generate(
-        PrototypeBrief(text: trimmed),
+      final PrototypeAgentTurn turn = agent is PrototypeConversationalAgent
+          ? await (agent as PrototypeConversationalAgent).respond(
+              PrototypeBrief(text: trimmed),
+            )
+          : PrototypeAgentTurn.contract(
+              document: await agent.generate(PrototypeBrief(text: trimmed)),
+            );
+      if (!_isCurrentGeneration(generationToken)) return;
+      if (turn.isClarification) {
+        _emit(
+          _state.copyWith(
+            status: StudioGenerationStatus.awaitingClarification,
+            messages: <StudioMessage>[
+              ..._state.messages,
+              StudioMessage(
+                role: StudioMessageRole.assistant,
+                text: turn.question!,
+                options: turn.options,
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      final _ContractEvaluation evaluation = await _evaluateContract(
+        turn.document!,
       );
       if (!_isCurrentGeneration(generationToken)) return;
-      final PrototypeSnapshot snapshot = _engine.load(response);
+      final PrototypeSnapshot snapshot = evaluation.snapshot;
       if (snapshot.status == PrototypeStatus.ready) {
         final PrototypeRevision? revision =
             await _captureRevision(trimmed, snapshot);
@@ -227,7 +259,9 @@ class StudioSession {
                 role: StudioMessageRole.assistant,
                 text: revision == null
                     ? 'Contrato validado. A composição está pronta, mas não pôde ser salva localmente.'
-                    : 'Contrato validado. Revisão ${revision.number} salva localmente e pronta para revisão.',
+                    : evaluation.repaired
+                        ? 'Contrato validado após uma correção automática. Revisão ${revision.number} salva localmente e pronta para revisão.'
+                        : 'Contrato validado. Revisão ${revision.number} salva localmente e pronta para revisão.',
               ),
             ],
             snapshot: snapshot,
@@ -256,10 +290,13 @@ class StudioSession {
     } on GatewayTransportException catch (error) {
       if (!_isCurrentGeneration(generationToken)) return;
       final String message = switch (error.code) {
-        'timeout' =>
+        'timeout' ||
+        'provider_timeout' =>
           'O agente ${agent.label} excedeu o tempo limite. Tente um briefing menor ou cancele e gere novamente.',
         'provider_response_invalid' =>
           'O agente ${agent.label} respondeu, mas o contrato não passou na validação automática. Tente novamente com uma descrição mais específica.',
+        'clarification_required' =>
+          'O agente ${agent.label} precisa de mais informações para continuar.',
         'provider_not_authenticated' =>
           'O agente ${agent.label} está instalado, mas não está autenticado. Faça login no próprio CLI e tente novamente.',
         'provider_failure' =>
@@ -297,6 +334,60 @@ class StudioSession {
   Future<void> retryLastPrompt() async {
     final String? prompt = _lastPrompt;
     if (prompt != null) await sendPrompt(prompt);
+  }
+
+  Future<_ContractEvaluation> _evaluateContract(String rawResponse) async {
+    final PrototypeSnapshot initial = _engine.load(rawResponse);
+    if (initial.status == PrototypeStatus.ready ||
+        agent is! PrototypeConversationalAgent) {
+      return _ContractEvaluation(snapshot: initial);
+    }
+
+    try {
+      final PrototypeAgentTurn repairTurn =
+          await (agent as PrototypeConversationalAgent).respond(
+        PrototypeBrief(text: _repairPrompt(initial)),
+      );
+      final String? repairedResponse = repairTurn.document;
+      if (repairedResponse == null) {
+        return _ContractEvaluation(snapshot: initial);
+      }
+      final PrototypeSnapshot repaired = _engine.load(repairedResponse);
+      if (repaired.status != PrototypeStatus.ready) {
+        return _ContractEvaluation(snapshot: initial);
+      }
+      return _ContractEvaluation(snapshot: repaired, repaired: true);
+    } on Object {
+      // Automatic repair is best effort. The original diagnostics are more
+      // useful than hiding a contract rejection behind a second provider
+      // failure.
+      return _ContractEvaluation(snapshot: initial);
+    }
+  }
+
+  String _repairPrompt(PrototypeSnapshot snapshot) {
+    final String issues = snapshot.issues
+        .take(8)
+        .map(
+          (ValidationIssue issue) => <String>[
+            'path=${issue.path}',
+            'component=${issue.componentId ?? '-'}',
+            'type=${issue.componentType ?? '-'}',
+            'property=${issue.propertyName ?? '-'}',
+            'message=${issue.message}',
+            'expected=${issue.expected ?? '-'}',
+            'received=${issue.receivedValue ?? '-'}',
+          ].join('; '),
+        )
+        .join('\n');
+    return <String>[
+      'O contrato da sua resposta anterior foi rejeitado pelo validador local.',
+      'Corrija somente os problemas listados abaixo usando o briefing original e o catálogo da mensagem de sistema.',
+      'Não faça perguntas, não explique a correção e não produza código.',
+      'Retorne somente {"type":"contract","document":{...}} com um Prototype Spec 1.1 válido.',
+      'Problemas encontrados:',
+      issues,
+    ].join('\n');
   }
 
   void cancelGeneration() {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prototype_agent/prototype_agent.dart';
+import 'package:prototype_flutter/prototype_flutter.dart';
 import 'package:prototype_material_catalog/prototype_material_catalog.dart';
 import 'package:prototype_material_exporter/prototype_material_exporter.dart';
 import 'package:prototype_runtime/prototype_runtime.dart';
@@ -27,6 +28,8 @@ void main() {
 
     expect(find.text('Pagamento confirmado'), findsOneWidget);
     expect(find.text('R\$ 250,00'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('surface-mode-inspect')));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Compartilhar comprovante'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Compartilhar comprovante'));
@@ -50,6 +53,84 @@ void main() {
 
     expect(find.text('OPENCODE'), findsWidgets);
     expect(find.text('MOTOR LOCAL'), findsNothing);
+  });
+
+  testWidgets('guides the PM through a clarification before generating', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final FlutterPrototypeCatalog catalog = createMaterialPrototypeCatalog();
+    final StudioSession session = StudioSession(
+      agents: <PrototypeAgent>[_ConversationalFakeAgent()],
+      initialAgentId: 'conversation-fake',
+      engine: PrototypeEngine(catalog: catalog.runtimeCatalog),
+      workspace: PrototypeWorkspace(repository: _MemoryRepository()),
+      exporter: const MaterialDraftExporter(),
+    );
+    addTearDown(session.dispose);
+    await session.initialize();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildFoundryTheme(),
+        home: StudioPage(session: session, catalog: catalog),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('prompt-field')),
+      'Quero uma tela de cadastro.',
+    );
+    await tester.tap(find.byKey(const Key('send-prompt-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+        session.current.status, StudioGenerationStatus.awaitingClarification);
+    expect(find.text('A tela deve permitir editar registros?'), findsOneWidget);
+    expect(find.text('Criar e editar'), findsOneWidget);
+
+    await tester.tap(find.text('Criar e editar'));
+    await tester.pumpAndSettle();
+
+    expect(session.current.status, StudioGenerationStatus.ready);
+    expect(find.text('Pergunta respondida'), findsWidgets);
+  });
+
+  testWidgets('repairs one invalid contract before showing the rejection panel',
+      (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final FlutterPrototypeCatalog catalog = createMaterialPrototypeCatalog();
+    final _RepairingFakeAgent agent = _RepairingFakeAgent();
+    final StudioSession session = StudioSession(
+      agents: <PrototypeAgent>[agent],
+      initialAgentId: agent.id,
+      engine: PrototypeEngine(catalog: catalog.runtimeCatalog),
+      workspace: PrototypeWorkspace(repository: _MemoryRepository()),
+      exporter: const MaterialDraftExporter(),
+    );
+    addTearDown(session.dispose);
+    await session.initialize();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildFoundryTheme(),
+        home: StudioPage(session: session, catalog: catalog),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('prompt-field')),
+      'Quero uma tela com uma métrica.',
+    );
+    await tester.tap(find.byKey(const Key('send-prompt-button')));
+    await tester.pumpAndSettle();
+
+    expect(session.current.status, StudioGenerationStatus.ready);
+    expect(agent.calls, 2);
+    expect(find.textContaining('correção automática'), findsOneWidget);
+    expect(find.byKey(const Key('contract-rejection-panel')), findsNothing);
   });
 
   testWidgets('saves revisions, compares them and exports a Flutter draft', (
@@ -168,6 +249,66 @@ class _MemoryWorkspaceTransfer implements WorkspaceTransfer {
 
   @override
   Future<String?> pickText() async => source;
+}
+
+class _ConversationalFakeAgent
+    implements PrototypeAgent, PrototypeConversationalAgent {
+  int calls = 0;
+
+  @override
+  String get id => 'conversation-fake';
+
+  @override
+  String get label => 'Agente conversacional';
+
+  @override
+  Future<String> generate(PrototypeBrief brief) async =>
+      (await respond(brief)).document!;
+
+  @override
+  Future<PrototypeAgentTurn> respond(PrototypeBrief brief) async {
+    calls++;
+    if (calls == 1) {
+      return const PrototypeAgentTurn.clarification(
+        question: 'A tela deve permitir editar registros?',
+        options: <String>['Somente criar', 'Criar e editar'],
+      );
+    }
+    return const PrototypeAgentTurn.contract(
+      document:
+          '{"specVersion":"1.0","screen":{"id":"answer","title":"Pergunta respondida","root":{"id":"root","type":"Divider"}}}',
+    );
+  }
+}
+
+class _RepairingFakeAgent
+    implements PrototypeAgent, PrototypeConversationalAgent {
+  int calls = 0;
+
+  @override
+  String get id => 'repairing-fake';
+
+  @override
+  String get label => 'Agente com correção';
+
+  @override
+  Future<String> generate(PrototypeBrief brief) async =>
+      (await respond(brief)).document!;
+
+  @override
+  Future<PrototypeAgentTurn> respond(PrototypeBrief brief) async {
+    calls++;
+    if (calls == 1) {
+      return const PrototypeAgentTurn.contract(
+        document:
+            '{"specVersion":"1.1","interaction":{"initialState":{},"actions":[]},"screen":{"id":"bad","title":"Métrica","root":{"id":"root","type":"Metric","props":{"label":"Total","value":"1","tone":"warning"}}}}',
+      );
+    }
+    return const PrototypeAgentTurn.contract(
+      document:
+          '{"specVersion":"1.1","interaction":{"initialState":{},"actions":[]},"screen":{"id":"fixed","title":"Métrica corrigida","root":{"id":"root","type":"Metric","props":{"label":"Total","value":"1","tone":"success"}}}}',
+    );
+  }
 }
 
 class _MemoryToolDiscovery implements ToolDiscovery {

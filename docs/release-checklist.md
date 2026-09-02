@@ -20,6 +20,15 @@ local authorization; Prototype Forge never asks for or stores an API key.
 - [ ] `.\run-local.ps1` starts the gateway and opens the Studio.
 - [ ] The local agent generates payment, login, banking and discovery scenarios.
 - [ ] OpenCode generates a valid contract with the configured model.
+- [ ] A contract with an invalid catalog value receives one automatic repair
+      attempt and only a revalidated contract reaches the preview.
+- [ ] When a material decision is missing, the agent asks one clarification and
+      the PM can answer by text or by selecting an option before generation.
+- [ ] The same person-registration brief produces a Prototype Spec 1.1 draft.
+- [ ] The PM can edit fields and switch employee status in `Interagir` mode.
+- [ ] Employee status shows and hides salary, role and CNPJ fields.
+- [ ] Required, CPF, CNPJ and minimum-age validation block invalid submit.
+- [ ] `Inspecionar` mode records actions without mutating prototype state.
 - [ ] An invalid contract identifies the affected component, property and next
       action in the rejection panel.
 - [ ] A running generation can be canceled, and a late response does not
@@ -49,3 +58,7 @@ the commit, test output and the browser smoke-test result.
   OpenCode computation already in progress.
 - The Material catalog is a public fixture. The company catalog is a separate
   integration milestone.
+- Interactive state is ephemeral and resets when the page or selected revision
+  changes; it is not production persistence.
+- Automatic repair adds one extra provider turn and can increase latency for
+  complex briefings.

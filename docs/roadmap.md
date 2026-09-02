@@ -39,6 +39,17 @@
 - versioned local workspace backup and restore
 - Windows/macOS environment diagnostics
 
+## Milestone 5 — Interactive prototypes — first local slice completed
+
+- backward-compatible Prototype Spec 1.1 interaction contract
+- pure-Dart state and effect engine
+- editable Material text fields
+- selected and conditional component states
+- required, CPF, CNPJ and minimum-age validation
+- allowlisted local effects with no arbitrary code execution
+- `Interagir` and `Inspecionar` canvas modes
+- deterministic interactive person-registration scenario
+
 ### Next refinements
 
 - rename and archive local projects
@@ -48,13 +59,14 @@
 - company design-system exporter adapter
 - export quality and rewrite-rate measurements
 - configurable scenario registry for local fixture-based discovery
+- navigation graphs and multi-screen flow transitions
 
 ## Explicit non-goals for version 1
 
 - executing generated Dart or JavaScript
 - full A2UI compatibility
 - arbitrary third-party widgets
-- navigation graphs and production state management
+- production state management and business API integration
 - automatic commits to product repositories
 - login, accounts or multi-user access
 - hosted servers, cloud persistence or remote credentials

@@ -43,7 +43,14 @@ class GatewayGenerateResponse {
     required this.providerId,
     required this.conversationId,
     required this.document,
+    this.clarification,
   });
+
+  const GatewayGenerateResponse.clarification({
+    required this.providerId,
+    required this.conversationId,
+    required GatewayClarification this.clarification,
+  }) : document = const <String, Object?>{};
 
   factory GatewayGenerateResponse.fromJson(Object? value) {
     final Map<String, Object?> json = gatewayMap(value, 'response');
@@ -52,9 +59,24 @@ class GatewayGenerateResponse {
         'Versão de protocolo incompatível: ${json['protocolVersion']}.',
       );
     }
+    final String providerId = gatewayString(json, 'providerId');
+    final String conversationId = gatewayString(json, 'conversationId');
+    final Object? rawClarification = json['clarification'];
+    if (json['kind'] == 'clarification' || rawClarification != null) {
+      if (rawClarification == null) {
+        throw const GatewayProtocolException(
+          'Uma resposta de clarification precisa informar clarification.',
+        );
+      }
+      return GatewayGenerateResponse.clarification(
+        providerId: providerId,
+        conversationId: conversationId,
+        clarification: GatewayClarification.fromJson(rawClarification),
+      );
+    }
     return GatewayGenerateResponse(
-      providerId: gatewayString(json, 'providerId'),
-      conversationId: gatewayString(json, 'conversationId'),
+      providerId: providerId,
+      conversationId: conversationId,
       document: gatewayMap(json['document'], 'document'),
     );
   }
@@ -62,12 +84,53 @@ class GatewayGenerateResponse {
   final String providerId;
   final String conversationId;
   final Map<String, Object?> document;
+  final GatewayClarification? clarification;
+
+  bool get isClarification => clarification != null;
 
   Map<String, Object?> toJson() => <String, Object?>{
         'protocolVersion': gatewayProtocolVersion,
         'providerId': providerId,
         'conversationId': conversationId,
-        'document': document,
+        'kind': isClarification ? 'clarification' : 'contract',
+        if (isClarification)
+          'clarification': clarification!.toJson()
+        else
+          'document': document,
+      };
+}
+
+class GatewayClarification {
+  const GatewayClarification({
+    required this.question,
+    this.options = const <String>[],
+  });
+
+  factory GatewayClarification.fromJson(Object? value) {
+    final Map<String, Object?> json = gatewayMap(value, 'clarification');
+    final Object? rawOptions = json['options'];
+    if (rawOptions != null &&
+        (rawOptions is! List ||
+            rawOptions.any((Object? option) => option is! String))) {
+      throw const GatewayProtocolException(
+        'clarification.options precisa ser uma lista de textos.',
+      );
+    }
+    final List<String> options = rawOptions == null
+        ? const <String>[]
+        : (rawOptions as List<Object?>).cast<String>();
+    return GatewayClarification(
+      question: gatewayString(json, 'question'),
+      options: options,
+    );
+  }
+
+  final String question;
+  final List<String> options;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'question': question,
+        if (options.isNotEmpty) 'options': options,
       };
 }
 

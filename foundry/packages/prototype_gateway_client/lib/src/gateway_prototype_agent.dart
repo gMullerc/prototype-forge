@@ -6,7 +6,8 @@ import 'package:prototype_runtime/prototype_runtime.dart';
 
 import 'gateway_transport.dart';
 
-class GatewayPrototypeAgent implements PrototypeAgent {
+class GatewayPrototypeAgent
+    implements PrototypeAgent, PrototypeConversationalAgent {
   GatewayPrototypeAgent({
     required this.id,
     required this.label,
@@ -41,6 +42,16 @@ class GatewayPrototypeAgent implements PrototypeAgent {
 
   @override
   Future<String> generate(PrototypeBrief brief) async {
+    final PrototypeAgentTurn turn = await respond(brief);
+    if (turn.document != null) return turn.document!;
+    throw GatewayTransportException(
+      code: 'clarification_required',
+      message: turn.question ?? 'O agente precisa de mais informações.',
+    );
+  }
+
+  @override
+  Future<PrototypeAgentTurn> respond(PrototypeBrief brief) async {
     final GatewayGenerateRequest request = GatewayGenerateRequest(
       providerId: providerId,
       prompt: brief.text,
@@ -61,7 +72,16 @@ class GatewayPrototypeAgent implements PrototypeAgent {
       );
     }
     _conversationId = response.conversationId;
-    return jsonEncode(response.document);
+    final GatewayClarification? clarification = response.clarification;
+    if (clarification != null) {
+      return PrototypeAgentTurn.clarification(
+        question: clarification.question,
+        options: clarification.options,
+      );
+    }
+    return PrototypeAgentTurn.contract(
+      document: jsonEncode(response.document),
+    );
   }
 
   static GatewayCatalogContract _encodeCatalog(PrototypeCatalog catalog) {

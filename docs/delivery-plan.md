@@ -154,6 +154,28 @@ Próximos refinamentos deste marco:
 - adicionar o exporter específico do design system da empresa;
 - medir quanto do rascunho exportado é reescrito pela engenharia.
 
+### 5. Tornar o protótipo interativo — primeira versão local concluída
+
+O Prototype Spec 1.1 adiciona estado inicial, ações declarativas e bindings de
+componente sem permitir código vindo do agente. O pacote puro Dart
+`prototype_interaction` interpreta somente efeitos registrados, enquanto o
+adapter Flutter conecta valores, erros e condições aos componentes do catálogo.
+
+O Studio inicia no modo `Interagir`, em que campos editáveis, seleção,
+visibilidade condicional e validação funcionam localmente. O modo `Inspecionar`
+preserva o fluxo anterior e registra eventos na conversa. Revisões 1.0 continuam
+compatíveis e estáticas.
+
+Exit criteria:
+
+- campos vinculados atualizam estado em memória;
+- opções selecionadas possuem feedback visual;
+- regiões condicionais respondem ao estado;
+- required, CPF, CNPJ e idade mínima bloqueiam submit inválido;
+- nenhum efeito acessa rede, arquivos, processos ou funções arbitrárias;
+- o catálogo Material e um adapter futuro usam a mesma fronteira;
+- testes Dart, Flutter e navegador cobrem a jornada de cadastro de pessoa.
+
 ## Decision gates
 
 1. After OpenCode: measure valid-first-response rate and repair rate.

@@ -612,6 +612,7 @@ class _RevisionPreview extends StatelessWidget {
                         child: PrototypeSurface(
                           document: snapshot.document!,
                           catalog: catalog,
+                          mode: PrototypeSurfaceMode.inspect,
                         ),
                       ),
                     ),

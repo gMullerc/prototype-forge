@@ -13,6 +13,7 @@ $dartProjects = @(
     'foundry\packages\prototype_gateway_client',
     'foundry\packages\prototype_tool_discovery',
     'foundry\packages\prototype_spec',
+    'foundry\packages\prototype_interaction',
     'foundry\packages\prototype_runtime',
     'foundry\packages\prototype_workspace',
     'foundry\packages\prototype_material_exporter',
