@@ -6,7 +6,7 @@
 - strict decoder and validation issues
 - actionable contract rejection feedback: rule, path, component and suggestion
 - runtime snapshot lifecycle
-- eight-component Material catalog
+- fourteen-component Material fixture catalog with realistic banking scenarios
 - responsive Flutter Web workbench
 - deterministic local agent
 - Flutter 3.24 analysis, tests and Web build

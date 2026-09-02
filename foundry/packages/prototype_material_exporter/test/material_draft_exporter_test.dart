@@ -56,4 +56,81 @@ void main() {
     final String output = const MaterialDraftExporter().export(document).source;
     expect(output, contains(r"PM\'s \$value"));
   });
+
+  test('exports the realistic Material catalog components deterministically',
+      () {
+    final PrototypeDocument document = PrototypeDocument(
+      specVersion: '1.0',
+      screen: PrototypeScreen(
+        id: 'bank-home',
+        title: 'Bank home',
+        root: PrototypeNode(
+          id: 'root',
+          type: 'Column',
+          children: <PrototypeNode>[
+            PrototypeNode(
+              id: 'profile',
+              type: 'Avatar',
+              props: const <String, Object?>{
+                'name': 'Marina Souza',
+                'initials': 'MS',
+              },
+            ),
+            PrototypeNode(
+              id: 'status',
+              type: 'Badge',
+              props: const <String, Object?>{
+                'label': 'Ativa',
+                'tone': 'success',
+              },
+            ),
+            PrototypeNode(
+              id: 'email',
+              type: 'TextField',
+              props: const <String, Object?>{
+                'label': 'E-mail',
+                'keyboard': 'email',
+              },
+            ),
+            PrototypeNode(
+              id: 'notice',
+              type: 'Notice',
+              props: const <String, Object?>{
+                'title': 'Acesso seguro',
+                'message': 'Sua conta está protegida.',
+                'tone': 'info',
+              },
+            ),
+            PrototypeNode(
+              id: 'balance',
+              type: 'Metric',
+              props: const <String, Object?>{
+                'label': 'Saldo',
+                'value': 'R\$ 8.450,32',
+              },
+            ),
+            PrototypeNode(
+              id: 'transaction',
+              type: 'ListItem',
+              props: const <String, Object?>{
+                'label': 'Mercado Aurora',
+                'trailing': '- R\$ 128,40',
+                'action': 'open_transaction',
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final String output = const MaterialDraftExporter().export(document).source;
+
+    expect(output, contains('CircleAvatar('));
+    expect(output, contains('Tooltip('));
+    expect(output, contains('TextFormField('));
+    expect(output, contains('InputDecoration('));
+    expect(output, contains('Card('));
+    expect(output, contains('ListTile('));
+    expect(output, contains("TODO(prototype): handle 'open_transaction'"));
+  });
 }

@@ -16,7 +16,7 @@ or runtime dependency on either implementation.
 foundry/packages/prototype_spec/             Pure Dart JSON contract and decoder
 foundry/packages/prototype_runtime/          Validation and engine
 foundry/packages/prototype_flutter/          Flutter renderer and event bridge
-foundry/packages/prototype_material_catalog/ Initial Material catalog
+foundry/packages/prototype_material_catalog/ Material fixture catalog (14 components)
 foundry/packages/prototype_agent/            Provider-neutral application port
 foundry/packages/prototype_export/           Provider-neutral export port
 foundry/packages/prototype_gateway_protocol/ Versioned local wire contract

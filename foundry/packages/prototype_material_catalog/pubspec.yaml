@@ -1,5 +1,5 @@
 name: prototype_material_catalog
-description: Initial Material component catalog for Prototype Foundry.
+description: Material fixture catalog with realistic components for Prototype Foundry.
 version: 0.1.0
 publish_to: none
 
@@ -20,4 +20,3 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
