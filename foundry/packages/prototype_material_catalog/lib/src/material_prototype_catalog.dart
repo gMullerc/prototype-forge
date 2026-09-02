@@ -260,13 +260,13 @@ Widget _buildButton(PrototypeRenderContext context, PrototypeNode node) {
       final String label = node.props['label']! as String;
       final String style = node.props['style'] as String? ?? 'primary';
       final String? iconName = node.props['icon'] as String?;
-      final Widget child = Row(
-        mainAxisSize: MainAxisSize.min,
+      final Widget child = Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 4,
         children: <Widget>[
-          if (iconName != null) ...<Widget>[
-            Icon(_icon(iconName), size: 18),
-            const SizedBox(width: 8),
-          ],
+          if (iconName != null) Icon(_icon(iconName), size: 18),
           Text(label),
         ],
       );

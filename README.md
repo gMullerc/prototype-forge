@@ -18,8 +18,11 @@ foundry/packages/prototype_runtime/          Validation and engine
 foundry/packages/prototype_flutter/          Flutter renderer and event bridge
 foundry/packages/prototype_material_catalog/ Initial Material catalog
 foundry/packages/prototype_agent/            Provider-neutral application port
+foundry/packages/prototype_export/           Provider-neutral export port
 foundry/packages/prototype_gateway_protocol/ Versioned local wire contract
 foundry/packages/prototype_gateway_client/   Transport-agnostic gateway adapter
+foundry/packages/prototype_material_exporter/ Deterministic Material draft exporter
+foundry/packages/prototype_workspace/         Local projects, revisions and comments
 foundry/services/local_gateway/              Local Dart service and OpenCode adapter
 foundry/tool/                                Cross-platform SDK helpers
 studio/                                      Flutter Web workbench

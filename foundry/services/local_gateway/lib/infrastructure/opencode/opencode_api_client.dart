@@ -35,7 +35,16 @@ class OpenCodeApiClient {
         'agent': 'plan',
         'system': input.systemPrompt,
         'tools': _disabledTools,
-        'format': const <String, Object?>{'type': 'text'},
+        'format': <String, Object?>{
+          'type': 'json_schema',
+          // The complete catalog schema is recursive and intentionally stays
+          // in the Foundry validator. OpenCode receives a compact transport
+          // schema so structured output remains reliable across models.
+          'schema': _structuredOutputSchema,
+          // OpenCode asks the model to repair the structured response before
+          // returning it to the gateway.
+          'retryCount': 2,
+        },
         if (_configuration.variant != null) 'variant': _configuration.variant,
         'parts': <Object?>[
           <String, Object?>{'type': 'text', 'text': input.userPrompt},
@@ -45,7 +54,7 @@ class OpenCodeApiClient {
     final Map<String, Object?> response = _map(payload, 'resposta');
     final Map<String, Object?> info = _map(response['info'], 'info');
     if (info['error'] != null) {
-      throw StateError('OpenCode retornou um erro: ${info['error']}');
+      throw _generationExceptionFor(info['error']);
     }
     final Map<String, Object?> document = _extractDocument(response, info);
     return ProviderGenerationOutput(
@@ -88,15 +97,17 @@ class OpenCodeApiClient {
     Map<String, Object?> response,
     Map<String, Object?> info,
   ) {
-    final Object? structured = info['structured'];
+    final Object? structured = info['structured'] ?? info['structured_output'];
     if (structured is Map<Object?, Object?>) {
       return _map(structured, 'documento estruturado');
+    }
+    if (structured != null) {
+      throw _invalidResponse();
     }
 
     final Object? partsValue = response['parts'];
     if (partsValue is! List<Object?>) {
-      throw StateError(
-          'OpenCode respondeu sem documento estruturado ou texto.');
+      throw _invalidResponse();
     }
     final String text = partsValue
         .whereType<Map<Object?, Object?>>()
@@ -106,13 +117,105 @@ class OpenCodeApiClient {
         .join('\n')
         .trim();
     if (text.isEmpty) {
-      throw StateError('OpenCode respondeu sem conteúdo utilizável.');
+      throw _invalidResponse();
     }
-    final String normalized = text
-        .replaceFirst(RegExp(r'^```(?:json)?\s*'), '')
-        .replaceFirst(RegExp(r'\s*```$'), '');
-    return _map(jsonDecode(normalized), 'documento');
+    try {
+      return _map(jsonDecode(_normalizeTextJson(text)), 'documento');
+    } on FormatException {
+      throw _invalidResponse();
+    } on StateError {
+      throw _invalidResponse();
+    }
   }
+
+  ProviderGenerationException _generationExceptionFor(Object? error) {
+    if (error is Map<Object?, Object?> &&
+        error['name'] == 'StructuredOutputError') {
+      return _invalidResponse();
+    }
+    return const ProviderGenerationException(
+      code: 'provider_failure',
+      message: 'O OpenCode retornou um erro durante a geração.',
+    );
+  }
+
+  ProviderGenerationException _invalidResponse() {
+    return const ProviderGenerationException(
+      code: 'provider_response_invalid',
+      message:
+          'O OpenCode respondeu, mas não produziu um contrato JSON válido após as tentativas automáticas.',
+    );
+  }
+
+  String _normalizeTextJson(String text) {
+    String normalized = text
+        .replaceFirst(RegExp(r'^\s*```(?:json)?\s*'), '')
+        .replaceFirst(RegExp(r'\s*```\s*$'), '')
+        .trim();
+    final int start = normalized.indexOf('{');
+    if (start > 0) normalized = normalized.substring(start);
+    final int end = _balancedObjectEnd(normalized);
+    if (end >= 0 && end < normalized.length - 1) {
+      normalized = normalized.substring(0, end + 1);
+    }
+    return normalized;
+  }
+
+  int _balancedObjectEnd(String value) {
+    int depth = 0;
+    bool inString = false;
+    bool escaped = false;
+    for (int index = 0; index < value.length; index++) {
+      final String character = value[index];
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (character == '\\') {
+          escaped = true;
+        } else if (character == '"') {
+          inString = false;
+        }
+        continue;
+      }
+      if (character == '"') {
+        inString = true;
+      } else if (character == '{') {
+        depth++;
+      } else if (character == '}') {
+        depth--;
+        if (depth == 0) return index;
+      }
+    }
+    return -1;
+  }
+
+  static const Map<String, Object?> _structuredOutputSchema = <String, Object?>{
+    'type': 'object',
+    'properties': <String, Object?>{
+      'specVersion': <String, Object?>{'type': 'string'},
+      'screen': <String, Object?>{
+        'type': 'object',
+        'properties': <String, Object?>{
+          'id': <String, Object?>{'type': 'string'},
+          'title': <String, Object?>{'type': 'string'},
+          // Component-level rules are checked by PrototypeEngine after the
+          // provider response arrives.
+          'root': <String, Object?>{
+            'type': 'object',
+            'properties': <String, Object?>{
+              'id': <String, Object?>{'const': 'root'},
+              'type': <String, Object?>{'type': 'string'},
+            },
+            'required': <String>['id', 'type'],
+          },
+        },
+        'required': <String>['id', 'title', 'root'],
+        'additionalProperties': false,
+      },
+    },
+    'required': <String>['specVersion', 'screen'],
+    'additionalProperties': false,
+  };
 
   Uri _uri(String path) {
     final Uri uri = _configuration.baseUri.resolve(path);

@@ -34,10 +34,73 @@ void main() {
     expect(result.document['specVersion'], '1.0');
     expect(host.ensureCalls, 1);
     final Map<String, Object?> promptBody = transport.bodies.last;
-    expect(promptBody['format'], <String, Object?>{'type': 'text'});
+    expect(
+      promptBody['format'],
+      containsPair('type', 'json_schema'),
+    );
+    expect(
+      (promptBody['format'] as Map<String, Object?>)['schema'],
+      containsPair('type', 'object'),
+    );
+    expect(
+      (promptBody['format'] as Map<String, Object?>)['retryCount'],
+      2,
+    );
     expect(promptBody['tools'], containsPair('bash', false));
   });
+
+  test('reads structured output returned by OpenCode', () async {
+    final OpenCodeApiClient client = OpenCodeApiClient(
+      configuration: _configuration,
+      host: _FakeOpenCodeHost(),
+      transport: _FakeJsonTransport(structured: true),
+    );
+
+    final ProviderGenerationOutput result = await client.generate(
+      const ProviderGenerationInput(
+        userPrompt: 'Crie uma tela',
+        systemPrompt: 'Retorne JSON',
+        outputSchema: <String, Object?>{'type': 'object'},
+      ),
+    );
+
+    expect(result.document['screen'], isA<Map<Object?, Object?>>());
+  });
+
+  test('classifies structured output failures as invalid responses', () async {
+    final OpenCodeApiClient client = OpenCodeApiClient(
+      configuration: _configuration,
+      host: _FakeOpenCodeHost(),
+      transport: _FakeJsonTransport(structuredError: true),
+    );
+
+    expect(
+      () => client.generate(
+        const ProviderGenerationInput(
+          userPrompt: 'Crie uma tela',
+          systemPrompt: 'Retorne JSON',
+          outputSchema: <String, Object?>{'type': 'object'},
+        ),
+      ),
+      throwsA(
+        isA<ProviderGenerationException>().having(
+          (ProviderGenerationException error) => error.code,
+          'code',
+          'provider_response_invalid',
+        ),
+      ),
+    );
+  });
 }
+
+const OpenCodeConfiguration _configuration = OpenCodeConfiguration(
+  executable: 'opencode',
+  host: '127.0.0.1',
+  port: 4096,
+  workspaceDirectory: 'workspace',
+  providerId: 'openai',
+  modelId: 'gpt-5.4-mini',
+);
 
 class _FakeOpenCodeHost implements OpenCodeHost {
   int ensureCalls = 0;
@@ -54,6 +117,13 @@ class _FakeOpenCodeHost implements OpenCodeHost {
 }
 
 class _FakeJsonTransport implements JsonHttpTransport {
+  _FakeJsonTransport({
+    this.structured = false,
+    this.structuredError = false,
+  });
+
+  final bool structured;
+  final bool structuredError;
   final List<Map<String, Object?>> bodies = <Map<String, Object?>>[];
 
   @override
@@ -66,6 +136,38 @@ class _FakeJsonTransport implements JsonHttpTransport {
     if (body is Map<String, Object?>) bodies.add(body);
     if (uri.path == '/session') {
       return <String, Object?>{'id': 'ses_test'};
+    }
+    if (structured) {
+      return <String, Object?>{
+        'info': <String, Object?>{
+          'structured': <String, Object?>{
+            'specVersion': '1.0',
+            'screen': <String, Object?>{
+              'id': 'a',
+              'title': 'A',
+              'root': <String, Object?>{
+                'id': 'root',
+                'type': 'Divider',
+              },
+            },
+          },
+        },
+        'parts': <Object?>[],
+      };
+    }
+    if (structuredError) {
+      return <String, Object?>{
+        'info': <String, Object?>{
+          'error': <String, Object?>{
+            'name': 'StructuredOutputError',
+            'data': <String, Object?>{
+              'message': 'invalid',
+              'retries': 2,
+            },
+          },
+        },
+        'parts': <Object?>[],
+      };
     }
     return <String, Object?>{
       'info': <String, Object?>{},

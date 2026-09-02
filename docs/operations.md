@@ -125,7 +125,9 @@ encerre a execução, rode novamente o script e valide o ambiente com
 
 ## Limites operacionais do MVP
 
-O processo é local e temporário. Não há garantia de persistência de projetos,
-histórico entre execuções, isolamento entre usuários ou recuperação de uma
-sessão encerrada. Esses temas pertencem ao futuro produto hospedado e devem ser
+O processo é local. Não há garantia de backup, sincronização, isolamento entre
+usuários ou recuperação depois que os dados do navegador forem apagados.
+Projetos, revisões e comentários são mantidos no `localStorage` do
+mesmo perfil do Chrome usado para abrir o Studio. Não há sincronização, backup
+ou nuvem. Esses temas pertencem ao futuro produto hospedado e devem ser
 decididos antes de qualquer implementação de autenticação ou Electron.

@@ -138,6 +138,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  prototype_export:
+    dependency: "direct main"
+    description:
+      path: "../foundry/packages/prototype_export"
+      relative: true
+    source: path
+    version: "0.1.0"
   prototype_flutter:
     dependency: "direct main"
     description:
@@ -166,6 +173,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  prototype_material_exporter:
+    dependency: "direct main"
+    description:
+      path: "../foundry/packages/prototype_material_exporter"
+      relative: true
+    source: path
+    version: "0.1.0"
   prototype_runtime:
     dependency: "direct main"
     description:
@@ -177,6 +191,13 @@ packages:
     dependency: "direct main"
     description:
       path: "../foundry/packages/prototype_spec"
+      relative: true
+    source: path
+    version: "0.1.0"
+  prototype_workspace:
+    dependency: "direct main"
+    description:
+      path: "../foundry/packages/prototype_workspace"
       relative: true
     source: path
     version: "0.1.0"

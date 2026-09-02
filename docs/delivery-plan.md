@@ -24,7 +24,7 @@ Deliver Prototype Spec 1.0, strict validation, a local Material catalog, a safe
 Flutter renderer and a deterministic agent. Acceptance requires unit tests,
 widget tests, a web build and one interactive PM journey.
 
-### 1.1 Tornar a rejeição de contrato acionável — planejado
+### 1.1 Tornar a rejeição de contrato acionável — primeira versão concluída
 
 Uma falha de validação não deve terminar em uma mensagem técnica isolada. O
 runtime e o Studio devem transformar cada issue em um diagnóstico que ajude o
@@ -108,11 +108,26 @@ Exit criteria:
 - a shared conformance suite passes for every catalog;
 - no company package is imported by core packages.
 
-### 4. Add the PM review workflow
+### 4. Add the PM review workflow — primeira versão local concluída
 
 Persist projects locally, keep immutable revisions, add device previews,
 comments and side-by-side comparison. Export a deterministic Flutter draft only
 after the team approves the quality bar; do not write to product repositories.
+
+A primeira versão salva projetos no `localStorage` do navegador, cria uma
+revisão imutável para cada contrato aprovado, permite abrir e comparar duas
+revisões, registrar notas, alternar entre celular/tablet/desktop e copiar um
+rascunho Flutter gerado pelo exporter Material. O fluxo não grava arquivos nem
+faz commits em repositórios externos.
+
+Próximos refinamentos deste marco:
+
+- renomear e arquivar projetos locais;
+- excluir dados somente por uma ação explícita e recuperável;
+- apresentar diferenças estruturais entre dois contratos além do preview;
+- editar ou resolver notas de revisão;
+- adicionar o exporter específico do design system da empresa;
+- medir quanto do rascunho exportado é reescrito pela engenharia.
 
 ## Decision gates
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-## Milestone 1 — Contract vertical slice
+## Milestone 1 — Contract vertical slice — completed
 
 - Prototype Spec 1.0
 - strict decoder and validation issues
@@ -28,13 +28,22 @@
 - component documentation fragments for model prompts
 - catalog contract tests and golden tests
 
-## Milestone 4 — Product workflow
+## Milestone 4 — Product workflow — first local slice completed
 
 - saved local projects and revisions
 - side-by-side revisions
 - device and breakpoint preview
 - comments and decision notes
 - deterministic Flutter code exporter
+
+### Next refinements
+
+- rename and archive local projects
+- recoverable deletion for local data
+- structural contract diff between revisions
+- resolve and edit review notes
+- company design-system exporter adapter
+- export quality and rewrite-rate measurements
 
 ## Explicit non-goals for version 1
 

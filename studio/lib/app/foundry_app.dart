@@ -3,11 +3,14 @@ import 'package:prototype_agent/prototype_agent.dart';
 import 'package:prototype_flutter/prototype_flutter.dart';
 import 'package:prototype_gateway_client/prototype_gateway_client.dart';
 import 'package:prototype_material_catalog/prototype_material_catalog.dart';
+import 'package:prototype_material_exporter/prototype_material_exporter.dart';
 import 'package:prototype_runtime/prototype_runtime.dart';
+import 'package:prototype_workspace/prototype_workspace.dart';
 
 import '../application/studio_session.dart';
 import '../infrastructure/gateway/platform_gateway_transport.dart';
 import '../infrastructure/local_prototype_agent.dart';
+import '../infrastructure/projects/platform_project_repository.dart';
 import '../presentation/foundry_theme.dart';
 import '../presentation/studio_page.dart';
 
@@ -43,7 +46,17 @@ class _FoundryAppState extends State<FoundryApp> {
     engine: PrototypeEngine(
       catalog: _catalog.runtimeCatalog,
     ),
+    workspace: PrototypeWorkspace(
+      repository: createPlatformProjectRepository(),
+    ),
+    exporter: const MaterialDraftExporter(),
   );
+
+  @override
+  void initState() {
+    super.initState();
+    _session.initialize();
+  }
 
   @override
   void dispose() {

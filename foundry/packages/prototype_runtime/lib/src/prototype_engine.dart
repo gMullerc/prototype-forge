@@ -54,6 +54,12 @@ class PrototypeEngine {
             code: 'decode_error',
             path: error.path,
             message: error.message,
+            title: 'A resposta não segue o formato do Prototype Spec',
+            suggestion:
+                'Solicite uma nova geração usando somente o contrato JSON esperado.',
+            priority: ValidationIssuePriority.critical,
+            propertyName: _propertyFromPath(error.path),
+            expected: 'Prototype Spec JSON válido na versão 1.0',
           ),
         ],
       );
@@ -66,5 +72,11 @@ class PrototypeEngine {
       document: document,
       issues: issues,
     );
+  }
+
+  static String? _propertyFromPath(String path) {
+    final RegExpMatch? match =
+        RegExp(r'\.([A-Za-z][A-Za-z0-9_]*)$').firstMatch(path);
+    return match?.group(1);
   }
 }
