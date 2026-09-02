@@ -13,14 +13,20 @@ dependencies:
     path: ../foundry/packages/prototype_agent
   prototype_flutter:
     path: ../foundry/packages/prototype_flutter
+  prototype_export:
+    path: ../foundry/packages/prototype_export
   prototype_gateway_client:
     path: ../foundry/packages/prototype_gateway_client
   prototype_material_catalog:
     path: ../foundry/packages/prototype_material_catalog
+  prototype_material_exporter:
+    path: ../foundry/packages/prototype_material_exporter
   prototype_runtime:
     path: ../foundry/packages/prototype_runtime
   prototype_spec:
     path: ../foundry/packages/prototype_spec
+  prototype_workspace:
+    path: ../foundry/packages/prototype_workspace
 
 dev_dependencies:
   flutter_test:

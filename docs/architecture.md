@@ -23,6 +23,11 @@ studio
   -> prototype_gateway_client
       -> prototype_gateway_protocol
 
+studio
+  -> prototype_workspace
+  -> prototype_export
+      <- prototype_material_exporter
+
 local_gateway
   -> prototype_gateway_protocol
   -> provider adapters
@@ -75,6 +80,26 @@ Flutter Web composition root and PM workbench. It owns provider selection, conve
 Pure Dart provider-neutral port used by the Studio application. Deterministic,
 OpenCode and future agents implement the same minimal interface.
 
+### prototype_workspace
+
+Pure Dart project and review domain. It owns immutable revisions, comments and
+the persistence port without importing Flutter, browser APIs, agents, catalogs
+or exporters. The Studio currently supplies a browser `localStorage` adapter;
+another host can replace it without changing the domain package.
+
+### prototype_export
+
+Pure Dart export port that accepts an already validated `PrototypeDocument` and
+returns a named source artifact. It does not know Flutter Material or any
+company design system.
+
+### prototype_material_exporter
+
+Catalog-specific implementation of `prototype_export`. It converts registered
+Material component types into readable Flutter source deterministically. A
+company design-system integration must provide its own exporter adapter rather
+than adding company widget knowledge to the neutral export port.
+
 ### prototype_gateway_protocol
 
 Pure Dart versioned wire contract between a local client and the local gateway.
@@ -103,8 +128,14 @@ brief
   -> PrototypeSpecDecoder
   -> PrototypeValidator
   -> PrototypeSnapshot.ready
+  -> immutable local revision
   -> PrototypeSurface
   -> registered Material/design-system factories
+
+approved revision
+  -> catalog-specific PrototypeExporter
+  -> reviewable Flutter draft
+  -> explicit human copy/review
 ```
 
 ## Security boundaries
@@ -117,3 +148,5 @@ brief
 - Remote URLs, scripts, inline catalogs and arbitrary functions are not part of version 1.
 - OpenCode tool permissions are denied for generation sessions.
 - The gateway and OpenCode bind only to the loopback interface.
+- Local project data stays in browser storage for the MVP.
+- Export returns text for human review and never writes to a product repository.

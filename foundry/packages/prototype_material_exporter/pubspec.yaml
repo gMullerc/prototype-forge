@@ -1,0 +1,16 @@
+name: prototype_material_exporter
+description: Deterministic Flutter Material draft exporter for Prototype Forge.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  prototype_export:
+    path: ../prototype_export
+  prototype_spec:
+    path: ../prototype_spec
+
+dev_dependencies:
+  test: ^1.25.8

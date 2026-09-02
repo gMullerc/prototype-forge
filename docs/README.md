@@ -62,6 +62,8 @@ decisão de produto posterior, não uma dependência escondida no MVP.
 | Flutter | Manter Flutter 3.24 como baseline inicial | [ADR 0003](adr/0003-flutter-324-baseline.md) |
 | Segurança | Nunca executar código gerado no preview | [ADR 0004](adr/0004-no-generated-code-execution.md) |
 | OpenCode | Integrar por gateway local e adapter na borda | [ADR 0005](adr/0005-local-provider-gateway.md) |
+| Projetos | Persistir revisões e comentários por uma porta local substituível | [ADR 0006](adr/0006-local-workspace-port.md) |
+| Exportação | Manter exporters específicos de catálogo atrás de uma porta neutra | [ADR 0007](adr/0007-catalog-specific-exporters.md) |
 | Design system | Catálogos plug-and-play, substituídos na composition root | [Arquitetura](architecture.md#design-system-adapters) |
 
 ## Organização do monorepo

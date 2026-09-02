@@ -2,12 +2,33 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:prototype_agent/prototype_agent.dart';
+import 'package:prototype_export/prototype_export.dart';
 import 'package:prototype_flutter/prototype_flutter.dart';
 import 'package:prototype_runtime/prototype_runtime.dart';
+import 'package:prototype_workspace/prototype_workspace.dart';
 
 import '../application/studio_session.dart';
 import '../domain/studio_message.dart';
+import 'contract_rejection_panel.dart';
+import 'export_draft_dialog.dart';
 import 'foundry_theme.dart';
+import 'review_workspace_dialog.dart';
+
+enum _PreviewViewport {
+  phone(width: 390, radius: 28, padding: 28),
+  tablet(width: 720, radius: 18, padding: 34),
+  desktop(width: 1040, radius: 5, padding: 38);
+
+  const _PreviewViewport({
+    required this.width,
+    required this.radius,
+    required this.padding,
+  });
+
+  final double width;
+  final double radius;
+  final double padding;
+}
 
 class StudioPage extends StatefulWidget {
   const StudioPage({
@@ -28,6 +49,7 @@ class _StudioPageState extends State<StudioPage> {
   final ScrollController _messagesController = ScrollController();
   late StudioState _state = widget.session.current;
   StreamSubscription<StudioState>? _subscription;
+  _PreviewViewport _viewport = _PreviewViewport.phone;
 
   @override
   void initState() {
@@ -65,6 +87,12 @@ class _StudioPageState extends State<StudioPage> {
             child: Column(
               children: <Widget>[
                 _Header(state: _state, agentLabel: widget.session.agent.label),
+                _ProjectBar(
+                  state: _state,
+                  onSelectProject: widget.session.selectProject,
+                  onCreateProject: _createProject,
+                  onOpenReview: _showReviewWorkspace,
+                ),
                 Expanded(
                   child: LayoutBuilder(
                     builder:
@@ -156,6 +184,7 @@ class _StudioPageState extends State<StudioPage> {
               children: <Widget>[
                 Expanded(
                   child: TextField(
+                    key: const Key('prompt-field'),
                     controller: _promptController,
                     minLines: 2,
                     maxLines: 4,
@@ -169,6 +198,7 @@ class _StudioPageState extends State<StudioPage> {
                   width: 52,
                   height: 52,
                   child: FilledButton(
+                    key: const Key('send-prompt-button'),
                     onPressed:
                         _state.status == StudioGenerationStatus.generating
                             ? null
@@ -205,13 +235,21 @@ class _StudioPageState extends State<StudioPage> {
             eyebrow: 'PRANCHETA',
             title:
                 _state.snapshot.document?.screen.title ?? 'Superfície validada',
-            trailing: _state.snapshot.rawResponse.isEmpty
+            trailing: _state.selectedRevision == null
                 ? null
-                : TextButton.icon(
-                    onPressed: _showContract,
-                    icon: const Icon(Icons.data_object, size: 17),
-                    label: const Text('VER CONTRATO'),
-                  ),
+                : _RevisionBadge(revision: _state.selectedRevision!),
+          ),
+          const Divider(height: 1, color: FoundryColors.ink),
+          _CanvasToolbar(
+            viewport: _viewport,
+            canReview: _state.activeProject?.revisions.isNotEmpty ?? false,
+            canExport: _state.snapshot.status == PrototypeStatus.ready,
+            canViewContract: _state.snapshot.rawResponse.isNotEmpty,
+            onViewportChanged: (_PreviewViewport value) =>
+                setState(() => _viewport = value),
+            onReview: _showReviewWorkspace,
+            onExport: _showExport,
+            onViewContract: _showContract,
           ),
           const Divider(height: 1, color: FoundryColors.ink),
           Expanded(
@@ -237,7 +275,11 @@ class _StudioPageState extends State<StudioPage> {
       );
     }
     if (snapshot.status == PrototypeStatus.invalid) {
-      return _InvalidCanvas(issues: snapshot.issues);
+      return ContractRejectionPanel(
+        issues: snapshot.issues,
+        onRetry: widget.session.retryLastPrompt,
+        onViewContract: _showContract,
+      );
     }
     if (snapshot.document == null) {
       return const _EmptyCanvas(
@@ -247,42 +289,53 @@ class _StudioPageState extends State<StudioPage> {
       );
     }
 
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F8F5),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: FoundryColors.ink, width: 1.4),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: FoundryColors.ink.withOpacity(0.12),
-            blurRadius: 30,
-            offset: const Offset(8, 12),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double targetWidth = constraints.maxWidth < _viewport.width
+            ? constraints.maxWidth
+            : _viewport.width;
+        return AnimatedContainer(
+          key: Key('preview-${_viewport.name}'),
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          width: targetWidth,
+          constraints: const BoxConstraints(maxHeight: 720),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F8F5),
+            borderRadius: BorderRadius.circular(_viewport.radius),
+            border: Border.all(color: FoundryColors.ink, width: 1.4),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: FoundryColors.ink.withOpacity(0.12),
+                blurRadius: 30,
+                offset: const Offset(8, 12),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(34),
-        child: Theme(
-          data: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF176B51),
-              brightness: Brightness.light,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(_viewport.padding),
+            child: Theme(
+              data: ThemeData(
+                useMaterial3: true,
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: const Color(0xFF176B51),
+                  brightness: Brightness.light,
+                ),
+              ),
+              child: PrototypeSurface(
+                document: snapshot.document!,
+                catalog: widget.catalog,
+                onAction: (PrototypeActionEvent event) {
+                  widget.session.recordAction(
+                    name: event.name,
+                    componentId: event.componentId,
+                  );
+                },
+              ),
             ),
           ),
-          child: PrototypeSurface(
-            document: snapshot.document!,
-            catalog: widget.catalog,
-            onAction: (PrototypeActionEvent event) {
-              widget.session.recordAction(
-                name: event.name,
-                componentId: event.componentId,
-              );
-            },
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -295,6 +348,59 @@ class _StudioPageState extends State<StudioPage> {
     final String prompt = _promptController.text;
     _promptController.clear();
     widget.session.sendPrompt(prompt);
+  }
+
+  void _showReviewWorkspace() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext context) => ReviewWorkspaceDialog(
+        session: widget.session,
+        catalog: widget.catalog,
+      ),
+    );
+  }
+
+  void _showExport() {
+    final PrototypeExportArtifact artifact =
+        widget.session.exportCurrentDraft();
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext context) => ExportDraftDialog(
+        artifact: artifact,
+        exporterLabel: widget.session.exporterLabel,
+      ),
+    );
+  }
+
+  Future<void> _createProject() async {
+    final TextEditingController controller = TextEditingController();
+    final String? name = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Novo projeto local'),
+        content: TextField(
+          key: const Key('quick-project-name-field'),
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Ex.: Jornada de fatura'),
+          onSubmitted: (String value) => Navigator.of(context).pop(value),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('CANCELAR'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('CRIAR'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name != null && name.trim().isNotEmpty) {
+      await widget.session.createProject(name);
+    }
   }
 
   void _showContract() {
@@ -345,6 +451,253 @@ class _StudioPageState extends State<StudioPage> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProjectBar extends StatelessWidget {
+  const _ProjectBar({
+    required this.state,
+    required this.onSelectProject,
+    required this.onCreateProject,
+    required this.onOpenReview,
+  });
+
+  final StudioState state;
+  final ValueChanged<String> onSelectProject;
+  final VoidCallback onCreateProject;
+  final VoidCallback onOpenReview;
+
+  @override
+  Widget build(BuildContext context) {
+    final PrototypeProject? project = state.activeProject;
+    return Container(
+      height: 48,
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFFE8E1D2),
+        border: Border.symmetric(
+          horizontal: BorderSide(color: FoundryColors.ink),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.folder_open_outlined, size: 17),
+            const SizedBox(width: 7),
+            const Text(
+              'PROJETO',
+              style: TextStyle(
+                fontFamily: 'Consolas',
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.0,
+              ),
+            ),
+            const SizedBox(width: 9),
+            SizedBox(
+              width: 230,
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  key: const Key('project-selector'),
+                  value: project?.id,
+                  isExpanded: true,
+                  hint: const Text(
+                    'Criado na primeira geração',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  items: <DropdownMenuItem<String>>[
+                    for (final PrototypeProject item in state.projects)
+                      DropdownMenuItem<String>(
+                        value: item.id,
+                        child: Text(
+                          item.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                  ],
+                  onChanged: (String? value) {
+                    if (value != null) onSelectProject(value);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              key: const Key('quick-new-project-button'),
+              onPressed: onCreateProject,
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('NOVO'),
+            ),
+            const SizedBox(width: 5),
+            TextButton.icon(
+              key: const Key('review-workspace-button'),
+              onPressed:
+                  project?.revisions.isNotEmpty ?? false ? onOpenReview : null,
+              icon: const Icon(Icons.history, size: 16),
+              label: Text(
+                project == null
+                    ? 'REVISÕES'
+                    : 'REVISÕES · ${project.revisions.length}',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                border: Border.all(color: FoundryColors.success),
+              ),
+              child: const Text(
+                'LOCAL',
+                style: TextStyle(
+                  fontFamily: 'Consolas',
+                  color: FoundryColors.success,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CanvasToolbar extends StatelessWidget {
+  const _CanvasToolbar({
+    required this.viewport,
+    required this.canReview,
+    required this.canExport,
+    required this.canViewContract,
+    required this.onViewportChanged,
+    required this.onReview,
+    required this.onExport,
+    required this.onViewContract,
+  });
+
+  final _PreviewViewport viewport;
+  final bool canReview;
+  final bool canExport;
+  final bool canViewContract;
+  final ValueChanged<_PreviewViewport> onViewportChanged;
+  final VoidCallback onReview;
+  final VoidCallback onExport;
+  final VoidCallback onViewContract;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 47,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
+          children: <Widget>[
+            const Text(
+              'VIEWPORT',
+              style: TextStyle(
+                fontFamily: 'Consolas',
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                color: FoundryColors.muted,
+              ),
+            ),
+            const SizedBox(width: 7),
+            for (final _PreviewViewport item in _PreviewViewport.values)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: _ViewportButton(
+                  viewport: item,
+                  selected: item == viewport,
+                  onPressed: () => onViewportChanged(item),
+                ),
+              ),
+            const SizedBox(width: 10),
+            Container(width: 1, height: 22, color: FoundryColors.line),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: canReview ? onReview : null,
+              icon: const Icon(Icons.compare_outlined, size: 16),
+              label: const Text('REVISAR'),
+            ),
+            TextButton.icon(
+              key: const Key('export-draft-button'),
+              onPressed: canExport ? onExport : null,
+              icon: const Icon(Icons.code, size: 16),
+              label: const Text('EXPORTAR DART'),
+            ),
+            TextButton.icon(
+              onPressed: canViewContract ? onViewContract : null,
+              icon: const Icon(Icons.data_object, size: 16),
+              label: const Text('CONTRATO'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ViewportButton extends StatelessWidget {
+  const _ViewportButton({
+    required this.viewport,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final _PreviewViewport viewport;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final IconData icon = switch (viewport) {
+      _PreviewViewport.phone => Icons.phone_android,
+      _PreviewViewport.tablet => Icons.tablet_mac,
+      _PreviewViewport.desktop => Icons.desktop_windows_outlined,
+    };
+    return IconButton(
+      key: Key('viewport-${viewport.name}'),
+      tooltip: switch (viewport) {
+        _PreviewViewport.phone => 'Celular',
+        _PreviewViewport.tablet => 'Tablet',
+        _PreviewViewport.desktop => 'Desktop',
+      },
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        backgroundColor: selected ? FoundryColors.ink : Colors.transparent,
+        foregroundColor: selected ? Colors.white : FoundryColors.ink,
+        side: const BorderSide(color: FoundryColors.ink),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+      ),
+      icon: Icon(icon, size: 15),
+    );
+  }
+}
+
+class _RevisionBadge extends StatelessWidget {
+  const _RevisionBadge({required this.revision});
+
+  final PrototypeRevision revision;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      color: const Color(0xFFFFE7B8),
+      child: Text(
+        'REV ${revision.number.toString().padLeft(2, '0')}',
+        style: const TextStyle(
+          fontFamily: 'Consolas',
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -661,9 +1014,10 @@ class _CanvasFooter extends StatelessWidget {
             ),
           ),
           Text(
-            state.snapshot.document == null
+            state.selectedRevision == null
                 ? 'SEM REVISÃO'
-                : state.snapshot.document!.screen.id.toUpperCase(),
+                : '${state.activeProject?.name.toUpperCase()} · REV ${state.selectedRevision!.number.toString().padLeft(2, '0')}',
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontFamily: 'Consolas',
               fontSize: 10,
@@ -711,35 +1065,6 @@ class _EmptyCanvas extends StatelessWidget {
           style: const TextStyle(color: FoundryColors.muted),
         ),
       ],
-    );
-  }
-}
-
-class _InvalidCanvas extends StatelessWidget {
-  const _InvalidCanvas({required this.issues});
-
-  final List<ValidationIssue> issues;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 620),
-      padding: const EdgeInsets.all(24),
-      color: const Color(0xFFFFE1D8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text('Contrato rejeitado',
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          for (final ValidationIssue issue in issues)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('• ${issue.path}: ${issue.message}'),
-            ),
-        ],
-      ),
     );
   }
 }

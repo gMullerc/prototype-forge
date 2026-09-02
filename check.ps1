@@ -8,10 +8,13 @@ $dart = Resolve-DartCommand -FlutterCommand $flutter
 
 $dartProjects = @(
     'foundry\packages\prototype_agent',
+    'foundry\packages\prototype_export',
     'foundry\packages\prototype_gateway_protocol',
     'foundry\packages\prototype_gateway_client',
     'foundry\packages\prototype_spec',
     'foundry\packages\prototype_runtime',
+    'foundry\packages\prototype_workspace',
+    'foundry\packages\prototype_material_exporter',
     'foundry\services\local_gateway'
 )
 $flutterProjects = @(
