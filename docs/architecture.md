@@ -51,7 +51,17 @@ Flutter adapter that recursively renders validated component nodes using factori
 
 ### prototype_material_catalog
 
-Initial catalog used to validate the product. It will be replaced or complemented by a company design-system catalog without changes to the core packages.
+Development fixture catalog built with Flutter Material. It currently covers the
+layout primitives `Column`, `Row` and `List`; content and navigation elements
+`Text`, `Icon`, `Divider`, `Button`, `Avatar`, `Badge`, `TextField`, `Notice`,
+`Metric` and `ListItem`. The catalog also includes realistic local scenarios
+for payment receipts, account login and a banking home screen.
+
+`createMaterialPrototypeCatalog` accepts optional
+`additionalFactories`. This keeps the fixture useful while allowing a product
+catalog to add a temporary component during development without editing the
+Material implementation. The company design system will eventually provide a
+separate adapter that implements the same boundary.
 
 ### Design-system adapters
 
@@ -115,6 +125,12 @@ catalog into protocol data and accepts an injected platform transport.
 Local Dart service and composition root for provider adapters. Its application
 use case knows `PrototypeProvider`, while only the OpenCode infrastructure
 adapter knows the OpenCode HTTP API or process lifecycle.
+
+Generation requests have an explicit timeout boundary. The gateway defaults to
+90 seconds per OpenCode generation and returns the stable `provider_timeout`
+error code when that boundary is reached. The Studio can cancel its current
+request at any time; a late response is ignored and cannot replace a newer
+prototype state.
 
 ## Prototype request flow
 

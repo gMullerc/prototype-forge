@@ -31,7 +31,7 @@ class _FoundryAppState extends State<FoundryApp> {
       createMaterialPrototypeCatalog();
   late final StudioSession _session = StudioSession(
     agents: <PrototypeAgent>[
-      const LocalPrototypeAgent(),
+      LocalPrototypeAgent(),
       GatewayPrototypeAgent(
         id: 'opencode',
         label: 'OpenCode',

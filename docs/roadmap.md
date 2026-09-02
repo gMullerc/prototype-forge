@@ -6,7 +6,7 @@
 - strict decoder and validation issues
 - actionable contract rejection feedback: rule, path, component and suggestion
 - runtime snapshot lifecycle
-- eight-component Material catalog
+- fourteen-component Material fixture catalog with realistic banking scenarios
 - responsive Flutter Web workbench
 - deterministic local agent
 - Flutter 3.24 analysis, tests and Web build
@@ -16,7 +16,7 @@
 - provider-neutral `PrototypeAgent` port
 - OpenCode adapter and local gateway
 - reuse the OpenCode session already authorized on the PM machine
-- session lifecycle and cancellation
+- session lifecycle and UI cancellation with late-response protection
 - malformed-response repair request
 - local diagnostics for OpenCode invocation failures
 
@@ -44,6 +44,7 @@
 - resolve and edit review notes
 - company design-system exporter adapter
 - export quality and rewrite-rate measurements
+- configurable scenario registry for local fixture-based discovery
 
 ## Explicit non-goals for version 1
 

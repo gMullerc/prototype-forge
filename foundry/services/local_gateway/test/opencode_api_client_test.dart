@@ -42,6 +42,16 @@ void main() {
       (promptBody['format'] as Map<String, Object?>)['schema'],
       containsPair('type', 'object'),
     );
+    final Map<String, Object?> transportSchema = (promptBody['format']
+        as Map<String, Object?>)['schema']! as Map<String, Object?>;
+    expect(
+      transportSchema['properties'],
+      containsPair('specVersion', containsPair('type', 'string')),
+    );
+    expect(
+      transportSchema['properties'],
+      containsPair('screen', containsPair('type', 'object')),
+    );
     expect(
       (promptBody['format'] as Map<String, Object?>)['retryCount'],
       2,
@@ -91,6 +101,43 @@ void main() {
       ),
     );
   });
+
+  test('classifies transport timeout as a provider timeout', () async {
+    final OpenCodeApiClient client = OpenCodeApiClient(
+      configuration: _configuration,
+      host: _FakeOpenCodeHost(),
+      transport: _FakeJsonTransport(timeoutError: true),
+    );
+
+    expect(
+      () => client.generate(
+        const ProviderGenerationInput(
+          userPrompt: 'Crie uma tela',
+          systemPrompt: 'Retorne JSON',
+          outputSchema: <String, Object?>{'type': 'object'},
+        ),
+      ),
+      throwsA(
+        isA<ProviderGenerationException>().having(
+          (ProviderGenerationException error) => error.code,
+          'code',
+          'provider_timeout',
+        ),
+      ),
+    );
+  });
+
+  test('reads the generation timeout from the environment', () {
+    final OpenCodeConfiguration configuration =
+        OpenCodeConfiguration.fromEnvironment(
+      const <String, String>{
+        'PROTOTYPE_OPENCODE_MODEL': 'openai/gpt-5.4',
+        'PROTOTYPE_OPENCODE_TIMEOUT_SECONDS': '42',
+      },
+    );
+
+    expect(configuration.generationTimeout, const Duration(seconds: 42));
+  });
 }
 
 const OpenCodeConfiguration _configuration = OpenCodeConfiguration(
@@ -120,10 +167,12 @@ class _FakeJsonTransport implements JsonHttpTransport {
   _FakeJsonTransport({
     this.structured = false,
     this.structuredError = false,
+    this.timeoutError = false,
   });
 
   final bool structured;
   final bool structuredError;
+  final bool timeoutError;
   final List<Map<String, Object?>> bodies = <Map<String, Object?>>[];
 
   @override
@@ -133,6 +182,12 @@ class _FakeJsonTransport implements JsonHttpTransport {
     Object? body,
     Duration timeout = const Duration(seconds: 120),
   }) async {
+    if (timeoutError) {
+      throw const JsonHttpException(
+        code: 'timeout',
+        message: 'timeout',
+      );
+    }
     if (body is Map<String, Object?>) bodies.add(body);
     if (uri.path == '/session') {
       return <String, Object?>{'id': 'ses_test'};

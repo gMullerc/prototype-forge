@@ -23,7 +23,13 @@ OpenCode on demand only when no healthy server is already running.
 | `PROTOTYPE_OPENCODE_EXECUTABLE` | Select another OpenCode executable |
 | `PROTOTYPE_OPENCODE_MODEL` | Select `provider/model` |
 | `PROTOTYPE_OPENCODE_VARIANT` | Select a model reasoning variant |
+| `PROTOTYPE_OPENCODE_TIMEOUT_SECONDS` | Generation timeout, default `90` |
 | `PROTOTYPE_WORKSPACE` | Change the isolated OpenCode working directory |
 
 No credential variable belongs to Prototype Foundry. Authentication remains in
 the independently installed OpenCode session.
+
+If a generation exceeds the configured timeout, the gateway returns
+`provider_timeout`. The Studio presents a retry-oriented message; canceling
+from the Studio also prevents a late response from changing the visible
+prototype.

@@ -36,13 +36,15 @@ StudioSession
 
 ## Safety
 
-OpenCode receives a JSON Schema generated from the active component catalog as
-part of the system instruction. Version 1.18.26 rejects the catalog's recursive
-schema in its structured-output field, so the adapter requests text JSON and
-parses it explicitly. The session denies tool permissions, known tools are
-disabled, and the system prompt prohibits file or command access. The resulting
-document is still passed through Prototype Foundry's independent decoder and
-validator before rendering.
+OpenCode receives the active component catalog as human-readable guidance in the
+system instruction. The recursive catalog schema stays in the Foundry
+validator. For structured output, the adapter sends only a small document
+envelope (`specVersion` and `screen`); this avoids provider-specific failures or
+long waits when OpenCode 1.18.26 receives detailed recursive constraints. The
+adapter also accepts text JSON as a response fallback. The session denies tool
+permissions, known tools are disabled, and the system prompt prohibits file or
+command access. The resulting document is always passed through Prototype
+Foundry's independent decoder and validator before rendering.
 
 ## Consequences
 
