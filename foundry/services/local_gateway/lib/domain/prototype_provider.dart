@@ -34,6 +34,19 @@ class ProviderGenerationOutput {
   final Map<String, Object?> document;
 }
 
+class ProviderGenerationException implements Exception {
+  const ProviderGenerationException({
+    required this.code,
+    required this.message,
+  });
+
+  final String code;
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 abstract interface class PrototypeProvider {
   String get id;
 

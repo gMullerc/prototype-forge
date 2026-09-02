@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:prototype_agent/prototype_agent.dart';
 import 'package:prototype_export/prototype_export.dart';
+import 'package:prototype_gateway_client/prototype_gateway_client.dart';
 import 'package:prototype_runtime/prototype_runtime.dart';
 import 'package:prototype_workspace/prototype_workspace.dart';
 
@@ -245,6 +246,24 @@ class StudioSession {
           ),
         );
       }
+    } on GatewayTransportException catch (error) {
+      final String message = switch (error.code) {
+        'provider_response_invalid' =>
+          'O agente ${agent.label} respondeu, mas o contrato não passou na validação automática. Tente novamente com uma descrição mais específica.',
+        'provider_failure' =>
+          'O agente ${agent.label} encontrou um erro durante a geração. Verifique o serviço e tente novamente.',
+        _ =>
+          'O agente ${agent.label} ficou indisponível durante a geração. Verifique o serviço e tente novamente.',
+      };
+      _emit(
+        _state.copyWith(
+          status: StudioGenerationStatus.failed,
+          messages: <StudioMessage>[
+            ..._state.messages,
+            StudioMessage(role: StudioMessageRole.error, text: message),
+          ],
+        ),
+      );
     } on Object catch (error) {
       _emit(
         _state.copyWith(

@@ -108,6 +108,15 @@ class LocalGatewayServer {
           message: error.message,
         ).toJson(),
       );
+    } on ProviderGenerationException catch (error) {
+      _json(
+        request.response,
+        HttpStatus.badGateway,
+        GatewayErrorResponse(
+          code: error.code,
+          message: error.message,
+        ).toJson(),
+      );
     } on Object catch (error) {
       _json(
         request.response,

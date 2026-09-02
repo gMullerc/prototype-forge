@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:prototype_gateway_protocol/prototype_gateway_protocol.dart';
 
 class PrototypeGenerationContract {
@@ -27,14 +25,15 @@ class PrototypeSpecContractBuilder implements PrototypeContractBuilder {
     return PrototypeGenerationContract(
       systemPrompt: <String>[
         'Você é um agente de prototipação de produto.',
-        'Retorne somente um documento Prototype Spec 1.0 que satisfaça o JSON Schema fornecido.',
+        'Retorne somente um documento Prototype Spec 1.0 como um único objeto JSON.',
         'Componha a interface exclusivamente com os componentes e propriedades registrados.',
         'Não execute ferramentas, não leia nem altere arquivos e não produza código Dart, HTML ou JavaScript.',
         'Use textos claros em português e IDs únicos, curtos e descritivos.',
+        'A estrutura é: specVersion, screen (id, title e root); cada nó usa id, type, props opcional e children quando o componente aceitar filhos.',
+        'O id do componente em screen.root deve ser exatamente "root".',
+        'Não use reticências, comentários, markdown ou texto antes/depois do objeto JSON.',
         'Componentes disponíveis:',
         componentGuide,
-        'JSON Schema de referência obrigatório:',
-        jsonEncode(outputSchema),
       ].join('\n'),
       outputSchema: outputSchema,
     );
