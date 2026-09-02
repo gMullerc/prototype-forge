@@ -35,6 +35,8 @@
 - device and breakpoint preview
 - comments and decision notes
 - deterministic Flutter code exporter
+- versioned local workspace backup and restore
+- Windows/macOS environment diagnostics
 
 ### Next refinements
 

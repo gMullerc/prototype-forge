@@ -120,6 +120,10 @@ revisões, registrar notas, alternar entre celular/tablet/desktop e copiar um
 rascunho Flutter gerado pelo exporter Material. O fluxo não grava arquivos nem
 faz commits em repositórios externos.
 
+O fechamento do piloto adiciona backup manual versionado do workspace em JSON,
+restauração desse backup e scripts de diagnóstico para validar o ambiente local
+antes do primeiro uso.
+
 Próximos refinamentos deste marco:
 
 - renomear e arquivar projetos locais;

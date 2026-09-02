@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prototype_agent/prototype_agent.dart';
@@ -40,6 +41,66 @@ void main() {
 
     expect(session.current.status, StudioGenerationStatus.idle);
     expect(repository.projects, isEmpty);
+  });
+
+  test('exports and imports the local workspace as a versioned backup',
+      () async {
+    final FlutterPrototypeCatalog catalog = createMaterialPrototypeCatalog();
+    final StudioSession session = StudioSession(
+      agents: <PrototypeAgent>[_SlowAgent(Completer<void>()..complete())],
+      initialAgentId: 'slow',
+      engine: PrototypeEngine(catalog: catalog.runtimeCatalog),
+      workspace: PrototypeWorkspace(repository: _MemoryRepository()),
+      exporter: const MaterialDraftExporter(),
+    );
+    addTearDown(session.dispose);
+    await session.initialize();
+
+    await session.importWorkspaceJson(
+      jsonEncode(<String, Object?>{
+        'format': 'prototype-forge.workspace',
+        'version': 1,
+        'projects': <Object?>[
+          <String, Object?>{
+            'id': 'project-bank',
+            'name': 'Jornada bancária',
+            'createdAt': '2026-09-02T10:00:00.000Z',
+            'updatedAt': '2026-09-02T10:00:00.000Z',
+            'revisions': <Object?>[
+              <String, Object?>{
+                'id': 'revision-1',
+                'number': 1,
+                'createdAt': '2026-09-02T10:00:00.000Z',
+                'brief': 'Tela inicial do banco',
+                'rawContract': '''
+{
+  "specVersion": "1.0",
+  "screen": {
+    "id": "bank-home",
+    "title": "Início da conta",
+    "root": {"id": "root", "type": "Divider"}
+  }
+}
+''',
+                'screenId': 'bank-home',
+                'screenTitle': 'Início da conta',
+              },
+            ],
+            'comments': <Object?>[],
+          },
+        ],
+      }),
+    );
+
+    expect(session.current.activeProject?.name, 'Jornada bancária');
+    expect(session.current.selectedRevision?.screenTitle, 'Início da conta');
+    expect(session.current.status, StudioGenerationStatus.ready);
+
+    final Map<String, Object?> backup =
+        jsonDecode(session.exportWorkspaceJson()) as Map<String, Object?>;
+    expect(backup['format'], 'prototype-forge.workspace');
+    expect(backup['version'], 1);
+    expect(backup['projects'], hasLength(1));
   });
 }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:prototype_agent/prototype_agent.dart';
 import 'package:prototype_export/prototype_export.dart';
@@ -315,6 +316,7 @@ class StudioSession {
   }
 
   Future<void> createProject(String name) async {
+    if (canCancelGeneration) return;
     final PrototypeProject project = await _workspace.createProject(name);
     _emit(
       _state.copyWith(
@@ -335,6 +337,7 @@ class StudioSession {
   }
 
   bool selectProject(String id) {
+    if (canCancelGeneration) return false;
     if (!_workspace.selectProject(id)) return false;
     final PrototypeProject project = _workspace.activeProject!;
     final PrototypeRevision? revision =
@@ -358,6 +361,7 @@ class StudioSession {
     required String projectId,
     required String revisionId,
   }) {
+    if (canCancelGeneration) return false;
     final PrototypeProject? project = _workspace.projectById(projectId);
     if (project == null) return false;
     PrototypeRevision? selected;
@@ -400,6 +404,49 @@ class StudioSession {
       throw StateError('Selecione uma revisão válida antes de exportar.');
     }
     return _exporter.export(document);
+  }
+
+  String exportWorkspaceJson() {
+    final Map<String, Object?> payload = <String, Object?>{
+      'format': 'prototype-forge.workspace',
+      'version': 1,
+      'projects': _workspace.projects
+          .map((PrototypeProject project) => project.toJson())
+          .toList(),
+    };
+    return const JsonEncoder.withIndent('  ').convert(payload);
+  }
+
+  Future<void> importWorkspaceJson(String source) async {
+    if (canCancelGeneration) cancelGeneration();
+    final List<PrototypeProject> projects = _decodeWorkspace(source);
+    await _workspace.replaceProjects(projects);
+    final PrototypeProject? project = _workspace.activeProject;
+    final PrototypeRevision? revision =
+        project == null || project.revisions.isEmpty
+            ? null
+            : project.revisions.last;
+    final PrototypeSnapshot snapshot = revision == null
+        ? const PrototypeSnapshot.idle()
+        : _engine.load(revision.rawContract);
+    _emit(
+      _state.copyWith(
+        status: _statusFor(snapshot),
+        messages: <StudioMessage>[
+          ..._state.messages,
+          StudioMessage(
+            role: StudioMessageRole.system,
+            text: projects.isEmpty
+                ? 'Backup importado. O workspace local está vazio.'
+                : 'Backup importado com ${projects.length} projeto(s) local(is).',
+          ),
+        ],
+        snapshot: snapshot,
+        projects: _workspace.projects,
+        activeProjectId: project?.id,
+        selectedRevisionId: revision?.id,
+      ),
+    );
   }
 
   void recordAction({required String name, required String componentId}) {
@@ -454,4 +501,33 @@ class StudioSession {
 
   bool _isCurrentGeneration(int token) =>
       !_disposed && token == _generationToken;
+
+  List<PrototypeProject> _decodeWorkspace(String source) {
+    try {
+      final Object? decoded = jsonDecode(source);
+      if (decoded is! Map<Object?, Object?> ||
+          decoded['format'] != 'prototype-forge.workspace' ||
+          decoded['version'] != 1) {
+        throw const FormatException(
+          'O arquivo não é um backup válido do Prototype Foundry.',
+        );
+      }
+      final Object? rawProjects = decoded['projects'];
+      if (rawProjects is! List<Object?>) {
+        throw const FormatException(
+          'O backup não contém uma lista de projetos válida.',
+        );
+      }
+      return rawProjects.map((Object? value) {
+        if (value is! Map<Object?, Object?>) {
+          throw const FormatException('Um projeto do backup está inválido.');
+        }
+        return PrototypeProject.fromJson(Map<String, Object?>.from(value));
+      }).toList();
+    } on FormatException {
+      rethrow;
+    } on Object catch (error) {
+      throw FormatException('Não foi possível ler o backup: $error');
+    }
+  }
 }

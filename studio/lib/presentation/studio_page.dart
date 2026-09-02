@@ -9,6 +9,7 @@ import 'package:prototype_workspace/prototype_workspace.dart';
 
 import '../application/studio_session.dart';
 import '../domain/studio_message.dart';
+import '../infrastructure/workspace_transfer/workspace_transfer.dart';
 import 'contract_rejection_panel.dart';
 import 'export_draft_dialog.dart';
 import 'foundry_theme.dart';
@@ -35,10 +36,12 @@ class StudioPage extends StatefulWidget {
     super.key,
     required this.session,
     required this.catalog,
+    this.workspaceTransfer,
   });
 
   final StudioSession session;
   final FlutterPrototypeCatalog catalog;
+  final WorkspaceTransfer? workspaceTransfer;
 
   @override
   State<StudioPage> createState() => _StudioPageState();
@@ -50,6 +53,8 @@ class _StudioPageState extends State<StudioPage> {
   late StudioState _state = widget.session.current;
   StreamSubscription<StudioState>? _subscription;
   _PreviewViewport _viewport = _PreviewViewport.phone;
+  late final WorkspaceTransfer _workspaceTransfer =
+      widget.workspaceTransfer ?? createWorkspaceTransfer();
 
   @override
   void initState() {
@@ -92,6 +97,8 @@ class _StudioPageState extends State<StudioPage> {
                   onSelectProject: widget.session.selectProject,
                   onCreateProject: _createProject,
                   onOpenReview: _showReviewWorkspace,
+                  onExportWorkspace: _exportWorkspace,
+                  onImportWorkspace: _importWorkspace,
                 ),
                 Expanded(
                   child: LayoutBuilder(
@@ -400,6 +407,39 @@ class _StudioPageState extends State<StudioPage> {
     }
   }
 
+  Future<void> _exportWorkspace() async {
+    try {
+      await _workspaceTransfer.downloadText(
+        filename: 'prototype-foundry-workspace.json',
+        contents: widget.session.exportWorkspaceJson(),
+      );
+      if (mounted) {
+        _showWorkspaceMessage('Backup do workspace exportado.');
+      }
+    } on Object catch (error) {
+      if (mounted) _showWorkspaceMessage('Não foi possível exportar: $error');
+    }
+  }
+
+  Future<void> _importWorkspace() async {
+    try {
+      final String? source = await _workspaceTransfer.pickText();
+      if (source == null) return;
+      await widget.session.importWorkspaceJson(source);
+      if (mounted) _showWorkspaceMessage('Backup importado com sucesso.');
+    } on FormatException catch (error) {
+      if (mounted) _showWorkspaceMessage('Backup inválido: ${error.message}');
+    } on Object catch (error) {
+      if (mounted) _showWorkspaceMessage('Não foi possível importar: $error');
+    }
+  }
+
+  void _showWorkspaceMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void _showContract() {
     showDialog<void>(
       context: context,
@@ -460,16 +500,22 @@ class _ProjectBar extends StatelessWidget {
     required this.onSelectProject,
     required this.onCreateProject,
     required this.onOpenReview,
+    required this.onExportWorkspace,
+    required this.onImportWorkspace,
   });
 
   final StudioState state;
   final ValueChanged<String> onSelectProject;
   final VoidCallback onCreateProject;
   final VoidCallback onOpenReview;
+  final Future<void> Function() onExportWorkspace;
+  final Future<void> Function() onImportWorkspace;
 
   @override
   Widget build(BuildContext context) {
     final PrototypeProject? project = state.activeProject;
+    final bool generationInProgress =
+        state.status == StudioGenerationStatus.generating;
     return Container(
       height: 48,
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
@@ -518,16 +564,18 @@ class _ProjectBar extends StatelessWidget {
                         ),
                       ),
                   ],
-                  onChanged: (String? value) {
-                    if (value != null) onSelectProject(value);
-                  },
+                  onChanged: generationInProgress
+                      ? null
+                      : (String? value) {
+                          if (value != null) onSelectProject(value);
+                        },
                 ),
               ),
             ),
             const SizedBox(width: 8),
             TextButton.icon(
               key: const Key('quick-new-project-button'),
-              onPressed: onCreateProject,
+              onPressed: generationInProgress ? null : onCreateProject,
               icon: const Icon(Icons.add, size: 16),
               label: const Text('NOVO'),
             ),
@@ -542,6 +590,29 @@ class _ProjectBar extends StatelessWidget {
                     ? 'REVISÕES'
                     : 'REVISÕES · ${project.revisions.length}',
               ),
+            ),
+            PopupMenuButton<String>(
+              key: const Key('workspace-menu'),
+              tooltip: 'Backup do workspace local',
+              onSelected: (String action) {
+                if (action == 'export') {
+                  unawaited(onExportWorkspace());
+                } else {
+                  unawaited(onImportWorkspace());
+                }
+              },
+              itemBuilder: (BuildContext context) =>
+                  const <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  value: 'export',
+                  child: Text('Exportar backup'),
+                ),
+                PopupMenuItem<String>(
+                  value: 'import',
+                  child: Text('Importar backup'),
+                ),
+              ],
+              icon: const Icon(Icons.more_horiz, size: 18),
             ),
             const SizedBox(width: 8),
             Container(

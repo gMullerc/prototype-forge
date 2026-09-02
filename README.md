@@ -45,6 +45,12 @@ docs/                                       Product context, architecture, plans
 If Flutter is not on `PATH`, use
 `.\run-local.ps1 -FlutterPath C:\path\to\flutter.bat`.
 
+Before the first run on a new Windows machine, check the local prerequisites:
+
+```powershell
+.\doctor.ps1
+```
+
 On macOS, use the shell script:
 
 ```bash
@@ -77,6 +83,10 @@ the Studio:
 $env:PROTOTYPE_OPENCODE_MODEL = 'openai/gpt-5.4'
 .\run-local.ps1
 ```
+
+The Windows launcher accepts `-GatewayHost` and `-GatewayPort` when another
+loopback port is needed. Workspace backups can be exported and imported from
+the `...` menu in the project bar.
 
 See `foundry/services/local_gateway/README.md` for the local configuration boundaries.
 

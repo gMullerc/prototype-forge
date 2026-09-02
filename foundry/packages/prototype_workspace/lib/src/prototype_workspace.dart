@@ -74,6 +74,17 @@ class PrototypeWorkspace {
     return true;
   }
 
+  Future<void> replaceProjects(Iterable<PrototypeProject> projects) async {
+    final List<PrototypeProject> next = List<PrototypeProject>.from(projects)
+      ..sort(
+        (PrototypeProject left, PrototypeProject right) =>
+            right.updatedAt.compareTo(left.updatedAt),
+      );
+    await _persist(next);
+    _projects = next;
+    _activeProjectId = next.isEmpty ? null : next.first.id;
+  }
+
   Future<PrototypeRevision> captureRevision({
     required String brief,
     required String rawContract,
