@@ -2,8 +2,34 @@ import 'dart:convert';
 
 import 'package:prototype_agent/prototype_agent.dart';
 
+import 'local_prototype_scenarios.dart';
+
 class LocalPrototypeAgent implements PrototypeAgent {
-  const LocalPrototypeAgent();
+  LocalPrototypeAgent({LocalPrototypeScenarioRegistry? scenarioRegistry}) {
+    _scenarioRegistry = scenarioRegistry ??
+        LocalPrototypeScenarioRegistry(
+          scenarios: <LocalPrototypeScenario>[
+            LocalPrototypeScenario(
+              id: 'receipt',
+              keywords: const <String>['pagamento', 'comprovante'],
+              builder: (_) => _receiptDocument(),
+            ),
+            LocalPrototypeScenario(
+              id: 'login',
+              keywords: const <String>['login', 'acesso', 'senha'],
+              builder: (_) => _loginDocument(),
+            ),
+            LocalPrototypeScenario(
+              id: 'bank-home',
+              keywords: const <String>['banco', 'saldo', 'conta'],
+              builder: (_) => _bankHomeDocument(),
+            ),
+          ],
+          fallback: _discoveryDocument,
+        );
+  }
+
+  late final LocalPrototypeScenarioRegistry _scenarioRegistry;
 
   @override
   String get id => 'local-contract';
@@ -14,20 +40,7 @@ class LocalPrototypeAgent implements PrototypeAgent {
   @override
   Future<String> generate(PrototypeBrief brief) async {
     await Future<void>.delayed(const Duration(milliseconds: 420));
-    final String normalized = brief.text.toLowerCase();
-    return jsonEncode(
-      normalized.contains('pagamento') || normalized.contains('comprovante')
-          ? _receiptDocument()
-          : normalized.contains('login') ||
-                  normalized.contains('acesso') ||
-                  normalized.contains('senha')
-              ? _loginDocument()
-              : normalized.contains('banco') ||
-                      normalized.contains('saldo') ||
-                      normalized.contains('conta')
-                  ? _bankHomeDocument()
-                  : _discoveryDocument(brief.text),
-    );
+    return jsonEncode(_scenarioRegistry.build(brief.text));
   }
 
   Map<String, Object?> _loginDocument() => <String, Object?>{

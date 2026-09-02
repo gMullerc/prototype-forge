@@ -16,7 +16,7 @@
 - provider-neutral `PrototypeAgent` port
 - OpenCode adapter and local gateway
 - reuse the OpenCode session already authorized on the PM machine
-- session lifecycle and cancellation
+- session lifecycle and UI cancellation with late-response protection
 - malformed-response repair request
 - local diagnostics for OpenCode invocation failures
 
@@ -44,6 +44,7 @@
 - resolve and edit review notes
 - company design-system exporter adapter
 - export quality and rewrite-rate measurements
+- configurable scenario registry for local fixture-based discovery
 
 ## Explicit non-goals for version 1
 

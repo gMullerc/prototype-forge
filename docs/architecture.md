@@ -126,6 +126,12 @@ Local Dart service and composition root for provider adapters. Its application
 use case knows `PrototypeProvider`, while only the OpenCode infrastructure
 adapter knows the OpenCode HTTP API or process lifecycle.
 
+Generation requests have an explicit timeout boundary. The gateway defaults to
+90 seconds per OpenCode generation and returns the stable `provider_timeout`
+error code when that boundary is reached. The Studio can cancel its current
+request at any time; a late response is ignored and cannot replace a newer
+prototype state.
+
 ## Prototype request flow
 
 ```text

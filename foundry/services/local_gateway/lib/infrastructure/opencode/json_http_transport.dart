@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 class JsonHttpException implements Exception {
   const JsonHttpException({
     required this.message,
+    this.code = 'http_error',
     this.statusCode,
     this.payload,
   });
 
   final String message;
+  final String code;
   final int? statusCode;
   final Object? payload;
 
@@ -67,6 +70,11 @@ class DartJsonHttpTransport implements JsonHttpTransport {
       return payload;
     } on JsonHttpException {
       rethrow;
+    } on TimeoutException {
+      throw JsonHttpException(
+        code: 'timeout',
+        message: 'Tempo limite ao acessar o OpenCode em $uri.',
+      );
     } on Object catch (error) {
       throw JsonHttpException(
         message: 'Falha ao acessar $uri: $error',

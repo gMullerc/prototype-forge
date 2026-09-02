@@ -23,10 +23,10 @@ class OpenCodeApiClient {
   ) async {
     await _host.ensureReady();
     final String sessionId = input.conversationId ?? await _createSession();
-    final Object? payload = await _transport.send(
+    final Object? payload = await _send(
       method: 'POST',
       uri: _uri('/session/${Uri.encodeComponent(sessionId)}/message'),
-      timeout: const Duration(minutes: 3),
+      timeout: _configuration.generationTimeout,
       body: <String, Object?>{
         'model': <String, Object?>{
           'providerID': _configuration.providerId,
@@ -65,7 +65,7 @@ class OpenCodeApiClient {
   }
 
   Future<String> _createSession() async {
-    final Object? payload = await _transport.send(
+    final Object? payload = await _send(
       method: 'POST',
       uri: _uri('/session'),
       timeout: const Duration(seconds: 30),
@@ -92,6 +92,31 @@ class OpenCodeApiClient {
       throw StateError('OpenCode não retornou um ID de sessão.');
     }
     return id;
+  }
+
+  Future<Object?> _send({
+    required String method,
+    required Uri uri,
+    required Duration timeout,
+    Object? body,
+  }) async {
+    try {
+      return await _transport.send(
+        method: method,
+        uri: uri,
+        timeout: timeout,
+        body: body,
+      );
+    } on JsonHttpException catch (error) {
+      if (error.code == 'timeout') {
+        throw ProviderGenerationException(
+          code: 'provider_timeout',
+          message:
+              'O OpenCode não respondeu dentro de ${timeout.inSeconds} segundos.',
+        );
+      }
+      rethrow;
+    }
   }
 
   Map<String, Object?> _extractDocument(

@@ -128,6 +128,7 @@ class StudioSession {
   bool _disposed = false;
   bool _initialized = false;
   String? _lastPrompt;
+  int _generationToken = 0;
 
   StudioState get current => _state;
   Stream<StudioState> get states => _states.stream;
@@ -135,6 +136,8 @@ class StudioSession {
       List<PrototypeAgent>.unmodifiable(_agents.values);
   PrototypeAgent get agent => _agents[_selectedAgentId]!;
   String get exporterLabel => _exporter.label;
+  bool get canCancelGeneration =>
+      _state.status == StudioGenerationStatus.generating;
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -192,6 +195,7 @@ class StudioSession {
       return;
     }
     _lastPrompt = trimmed;
+    final int generationToken = ++_generationToken;
 
     _emit(
       _state.copyWith(
@@ -207,10 +211,12 @@ class StudioSession {
       final String response = await agent.generate(
         PrototypeBrief(text: trimmed),
       );
+      if (!_isCurrentGeneration(generationToken)) return;
       final PrototypeSnapshot snapshot = _engine.load(response);
       if (snapshot.status == PrototypeStatus.ready) {
         final PrototypeRevision? revision =
             await _captureRevision(trimmed, snapshot);
+        if (!_isCurrentGeneration(generationToken)) return;
         _emit(
           _state.copyWith(
             status: StudioGenerationStatus.ready,
@@ -247,7 +253,10 @@ class StudioSession {
         );
       }
     } on GatewayTransportException catch (error) {
+      if (!_isCurrentGeneration(generationToken)) return;
       final String message = switch (error.code) {
+        'timeout' =>
+          'O agente ${agent.label} excedeu o tempo limite. Tente um briefing menor ou cancele e gere novamente.',
         'provider_response_invalid' =>
           'O agente ${agent.label} respondeu, mas o contrato não passou na validação automática. Tente novamente com uma descrição mais específica.',
         'provider_failure' =>
@@ -265,6 +274,7 @@ class StudioSession {
         ),
       );
     } on Object catch (error) {
+      if (!_isCurrentGeneration(generationToken)) return;
       _emit(
         _state.copyWith(
           status: StudioGenerationStatus.failed,
@@ -284,6 +294,24 @@ class StudioSession {
   Future<void> retryLastPrompt() async {
     final String? prompt = _lastPrompt;
     if (prompt != null) await sendPrompt(prompt);
+  }
+
+  void cancelGeneration() {
+    if (!canCancelGeneration) return;
+    _generationToken += 1;
+    _emit(
+      _state.copyWith(
+        status: _statusFor(_state.snapshot),
+        messages: <StudioMessage>[
+          ..._state.messages,
+          const StudioMessage(
+            role: StudioMessageRole.system,
+            text:
+                'Geração cancelada. O briefing continua disponível para nova tentativa.',
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> createProject(String name) async {
@@ -419,7 +447,11 @@ class StudioSession {
   }
 
   void dispose() {
+    _generationToken += 1;
     _disposed = true;
     _states.close();
   }
+
+  bool _isCurrentGeneration(int token) =>
+      !_disposed && token == _generationToken;
 }

@@ -43,8 +43,27 @@ The deterministic local agent selects fixtures from the PM brief:
   credit-card metrics and recent transactions;
 - any other brief: discovery screen used to explore a new hypothesis.
 
-The selection is only a local testing convenience. OpenCode receives the
-active catalog contracts and can compose any valid tree from the registered
+The selection is isolated in `LocalPrototypeScenarioRegistry`. A new local
+fixture can be injected into `LocalPrototypeAgent` with keywords and a document
+builder, without changing the dispatch logic or any Foundry package:
+
+```dart
+final agent = LocalPrototypeAgent(
+  scenarioRegistry: LocalPrototypeScenarioRegistry(
+    scenarios: <LocalPrototypeScenario>[
+      LocalPrototypeScenario(
+        id: 'checkout',
+        keywords: const <String>['checkout', 'carrinho'],
+        builder: buildCheckoutDocument,
+      ),
+    ],
+    fallback: buildDiscoveryDocument,
+  ),
+);
+```
+
+The registry is a Studio fixture seam only. OpenCode receives the active
+catalog contracts and can compose any valid tree from the registered
 components.
 
 ## Adding a temporary component

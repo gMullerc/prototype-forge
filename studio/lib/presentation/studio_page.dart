@@ -201,7 +201,7 @@ class _StudioPageState extends State<StudioPage> {
                     key: const Key('send-prompt-button'),
                     onPressed:
                         _state.status == StudioGenerationStatus.generating
-                            ? null
+                            ? widget.session.cancelGeneration
                             : _sendPrompt,
                     style: FilledButton.styleFrom(
                       padding: EdgeInsets.zero,
@@ -209,11 +209,7 @@ class _StudioPageState extends State<StudioPage> {
                       foregroundColor: FoundryColors.ink,
                     ),
                     child: _state.status == StudioGenerationStatus.generating
-                        ? const SizedBox(
-                            width: 19,
-                            height: 19,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const Icon(Icons.stop_rounded, size: 22)
                         : const Icon(Icons.arrow_upward, size: 22),
                   ),
                 ),
@@ -271,7 +267,8 @@ class _StudioPageState extends State<StudioPage> {
       return const _EmptyCanvas(
         icon: Icons.architecture,
         title: 'Compondo o contrato…',
-        description: 'O motor está organizando componentes e propriedades.',
+        description:
+            'O motor está organizando componentes e propriedades. Toque no botão laranja para cancelar.',
       );
     }
     if (snapshot.status == PrototypeStatus.invalid) {

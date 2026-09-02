@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prototype_agent/prototype_agent.dart';
 import 'package:prototype_foundry_studio/infrastructure/local_prototype_agent.dart';
+import 'package:prototype_foundry_studio/infrastructure/local_prototype_scenarios.dart';
 
 void main() {
-  const LocalPrototypeAgent agent = LocalPrototypeAgent();
+  final LocalPrototypeAgent agent = LocalPrototypeAgent();
 
   test('creates a realistic account access scenario', () async {
     final Map<String, Object?> document = await _decode(
@@ -32,6 +33,50 @@ void main() {
     expect(_containsText(document, 'Movimentações recentes'), isTrue);
     expect(_containsType(document, 'Metric'), isTrue);
     expect(_containsType(document, 'ListItem'), isTrue);
+  });
+
+  test('allows a scenario to be added without changing the agent', () async {
+    final LocalPrototypeAgent configurableAgent = LocalPrototypeAgent(
+      scenarioRegistry: LocalPrototypeScenarioRegistry(
+        scenarios: <LocalPrototypeScenario>[
+          LocalPrototypeScenario(
+            id: 'checkout',
+            keywords: const <String>['checkout'],
+            builder: (_) => <String, Object?>{
+              'specVersion': '1.0',
+              'screen': <String, Object?>{
+                'id': 'checkout',
+                'title': 'Checkout',
+                'root': <String, Object?>{
+                  'id': 'root',
+                  'type': 'Divider',
+                },
+              },
+            },
+          ),
+        ],
+        fallback: (_) => <String, Object?>{
+          'specVersion': '1.0',
+          'screen': <String, Object?>{
+            'id': 'fallback',
+            'title': 'Fallback',
+            'root': <String, Object?>{
+              'id': 'root',
+              'type': 'Divider',
+            },
+          },
+        },
+      ),
+    );
+
+    final Map<String, Object?> document = await _decode(
+      configurableAgent.generate(const PrototypeBrief(text: 'Fluxo checkout')),
+    );
+
+    expect(
+      (document['screen']! as Map<String, Object?>)['title'],
+      'Checkout',
+    );
   });
 }
 

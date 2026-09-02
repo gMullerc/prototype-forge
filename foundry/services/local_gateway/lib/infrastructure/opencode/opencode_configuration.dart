@@ -9,6 +9,7 @@ class OpenCodeConfiguration {
     required this.providerId,
     required this.modelId,
     this.variant,
+    this.generationTimeout = const Duration(seconds: 90),
   });
 
   factory OpenCodeConfiguration.fromEnvironment(
@@ -22,6 +23,11 @@ class OpenCodeConfiguration {
         'PROTOTYPE_OPENCODE_MODEL deve usar provider/model: $model',
       );
     }
+    final int generationTimeoutSeconds = _positiveInt(
+      environment['PROTOTYPE_OPENCODE_TIMEOUT_SECONDS'],
+      defaultValue: 90,
+      variableName: 'PROTOTYPE_OPENCODE_TIMEOUT_SECONDS',
+    );
     return OpenCodeConfiguration(
       executable: environment['PROTOTYPE_OPENCODE_EXECUTABLE'] ?? 'opencode',
       host: environment['PROTOTYPE_OPENCODE_HOST'] ?? '127.0.0.1',
@@ -31,6 +37,7 @@ class OpenCodeConfiguration {
       providerId: model.substring(0, separator),
       modelId: model.substring(separator + 1),
       variant: _nonEmpty(environment['PROTOTYPE_OPENCODE_VARIANT']),
+      generationTimeout: Duration(seconds: generationTimeoutSeconds),
     );
   }
 
@@ -41,6 +48,7 @@ class OpenCodeConfiguration {
   final String providerId;
   final String modelId;
   final String? variant;
+  final Duration generationTimeout;
 
   Uri get baseUri => Uri(scheme: 'http', host: host, port: port);
 
@@ -49,5 +57,19 @@ class OpenCodeConfiguration {
   static String? _nonEmpty(String? value) {
     final String? trimmed = value?.trim();
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  static int _positiveInt(
+    String? value, {
+    required int defaultValue,
+    required String variableName,
+  }) {
+    if (value == null || value.trim().isEmpty) return defaultValue;
+    final int? parsed = int.tryParse(value.trim());
+    if (parsed == null || parsed <= 0) {
+      throw FormatException(
+          '$variableName deve ser um número inteiro positivo.');
+    }
+    return parsed;
   }
 }

@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:html';
 
@@ -43,6 +44,11 @@ class _WebGatewayTransport implements GatewayTransport {
       );
     } on GatewayTransportException {
       rethrow;
+    } on TimeoutException {
+      throw const GatewayTransportException(
+        code: 'timeout',
+        message: 'O gateway local demorou demais para responder.',
+      );
     } on Object catch (error) {
       throw GatewayTransportException(
         message:
