@@ -33,6 +33,8 @@ void main() {
     expect(result.conversationId, 'ses_test');
     expect(result.document['specVersion'], '1.0');
     expect(host.ensureCalls, 1);
+    final Map<String, Object?> sessionBody = transport.bodies.first;
+    expect(sessionBody, <String, Object?>{'title': 'Prototype Foundry'});
     final Map<String, Object?> promptBody = transport.bodies.last;
     expect(
       promptBody['format'],
@@ -53,8 +55,8 @@ void main() {
       containsPair('screen', containsPair('type', 'object')),
     );
     expect(
-      (promptBody['format'] as Map<String, Object?>)['retryCount'],
-      2,
+      (promptBody['format'] as Map<String, Object?>).containsKey('retryCount'),
+      isFalse,
     );
     expect(promptBody['tools'], containsPair('bash', false));
   });

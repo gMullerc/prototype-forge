@@ -42,9 +42,6 @@ class OpenCodeApiClient {
           // envelope so structured output remains reliable across models;
           // component types, properties and actions are validated afterward.
           'schema': _structuredOutputSchema,
-          // OpenCode asks the model to repair the structured response before
-          // returning it to the gateway.
-          'retryCount': 2,
         },
         if (_configuration.variant != null) 'variant': _configuration.variant,
         'parts': <Object?>[
@@ -71,19 +68,6 @@ class OpenCodeApiClient {
       timeout: const Duration(seconds: 30),
       body: <String, Object?>{
         'title': 'Prototype Foundry',
-        'agent': 'plan',
-        'model': <String, Object?>{
-          'id': _configuration.modelId,
-          'providerID': _configuration.providerId,
-          if (_configuration.variant != null) 'variant': _configuration.variant,
-        },
-        'permission': <Object?>[
-          <String, Object?>{
-            'permission': '*',
-            'pattern': '*',
-            'action': 'deny',
-          },
-        ],
       },
     );
     final Map<String, Object?> session = _map(payload, 'sessão');
