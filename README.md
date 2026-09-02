@@ -24,7 +24,7 @@ foundry/services/local_gateway/              Local Dart service and OpenCode ada
 foundry/tool/                                Cross-platform SDK helpers
 studio/                                      Flutter Web workbench
 .opencode/skills/                            OpenCode skills for catalog maintenance
-foundry/docs/                                Architecture decisions and roadmap
+docs/                                       Product context, architecture, plans and ADRs
 ```
 
 ## Compatibility baseline
