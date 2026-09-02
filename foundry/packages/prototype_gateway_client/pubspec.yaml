@@ -1,0 +1,18 @@
+name: prototype_gateway_client
+description: Transport-agnostic local gateway agent adapter for Prototype Foundry.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  prototype_agent:
+    path: ../prototype_agent
+  prototype_gateway_protocol:
+    path: ../prototype_gateway_protocol
+  prototype_runtime:
+    path: ../prototype_runtime
+
+dev_dependencies:
+  test: ^1.25.8

@@ -1,0 +1,21 @@
+name: prototype_flutter
+description: Flutter renderer adapter for validated Prototype Foundry documents.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  prototype_runtime:
+    path: ../prototype_runtime
+  prototype_spec:
+    path: ../prototype_spec
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+

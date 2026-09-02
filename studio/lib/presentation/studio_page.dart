@@ -1,0 +1,828 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:prototype_agent/prototype_agent.dart';
+import 'package:prototype_flutter/prototype_flutter.dart';
+import 'package:prototype_runtime/prototype_runtime.dart';
+
+import '../application/studio_session.dart';
+import '../domain/studio_message.dart';
+import 'foundry_theme.dart';
+
+class StudioPage extends StatefulWidget {
+  const StudioPage({
+    super.key,
+    required this.session,
+    required this.catalog,
+  });
+
+  final StudioSession session;
+  final FlutterPrototypeCatalog catalog;
+
+  @override
+  State<StudioPage> createState() => _StudioPageState();
+}
+
+class _StudioPageState extends State<StudioPage> {
+  final TextEditingController _promptController = TextEditingController();
+  final ScrollController _messagesController = ScrollController();
+  late StudioState _state = widget.session.current;
+  StreamSubscription<StudioState>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = widget.session.states.listen((StudioState state) {
+      if (!mounted) return;
+      setState(() => _state = state);
+      WidgetsBinding.instance.addPostFrameCallback((Duration _) {
+        if (_messagesController.hasClients) {
+          _messagesController.animateTo(
+            _messagesController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _promptController.dispose();
+    _messagesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: <Widget>[
+          const Positioned.fill(child: _BlueprintGrid()),
+          SafeArea(
+            child: Column(
+              children: <Widget>[
+                _Header(state: _state, agentLabel: widget.session.agent.label),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder:
+                        (BuildContext context, BoxConstraints constraints) {
+                      if (constraints.maxWidth < 900) {
+                        return ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                          children: <Widget>[
+                            SizedBox(height: 520, child: _buildBriefingPanel()),
+                            const SizedBox(height: 16),
+                            SizedBox(height: 720, child: _buildCanvas()),
+                          ],
+                        );
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            SizedBox(width: 400, child: _buildBriefingPanel()),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildCanvas()),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBriefingPanel() {
+    return _FramedPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _PanelHeading(
+            index: '01',
+            eyebrow: 'BRIEFING',
+            title: 'Nova hipótese',
+            trailing: _AgentSelector(
+              agents: widget.session.agents,
+              selectedId: widget.session.agent.id,
+              enabled: _state.status != StudioGenerationStatus.generating,
+              onSelected: widget.session.selectAgent,
+            ),
+          ),
+          const Divider(height: 1, color: FoundryColors.ink),
+          Expanded(
+            child: ListView.separated(
+              controller: _messagesController,
+              padding: const EdgeInsets.all(18),
+              itemCount: _state.messages.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 14),
+              itemBuilder: (BuildContext context, int index) =>
+                  _MessageCard(message: _state.messages[index]),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            child: Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: <Widget>[
+                _Suggestion(
+                  label: 'Comprovante de pagamento',
+                  onTap: () => _useSuggestion(
+                    'Crie um comprovante de pagamento para Marina Souza no valor de R\$ 250,00.',
+                  ),
+                ),
+                _Suggestion(
+                  label: 'Hipótese de onboarding',
+                  onTap: () => _useSuggestion(
+                    'Crie uma hipótese de onboarding para novos clientes.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _promptController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: 'Descreva a tela, o fluxo ou a hipótese…',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed:
+                        _state.status == StudioGenerationStatus.generating
+                            ? null
+                            : _sendPrompt,
+                    style: FilledButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: FoundryColors.orange,
+                      foregroundColor: FoundryColors.ink,
+                    ),
+                    child: _state.status == StudioGenerationStatus.generating
+                        ? const SizedBox(
+                            width: 19,
+                            height: 19,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.arrow_upward, size: 22),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCanvas() {
+    return _FramedPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _PanelHeading(
+            index: '02',
+            eyebrow: 'PRANCHETA',
+            title:
+                _state.snapshot.document?.screen.title ?? 'Superfície validada',
+            trailing: _state.snapshot.rawResponse.isEmpty
+                ? null
+                : TextButton.icon(
+                    onPressed: _showContract,
+                    icon: const Icon(Icons.data_object, size: 17),
+                    label: const Text('VER CONTRATO'),
+                  ),
+          ),
+          const Divider(height: 1, color: FoundryColors.ink),
+          Expanded(
+            child: Container(
+              color: const Color(0xFFE2DDCF),
+              padding: const EdgeInsets.all(24),
+              child: Center(child: _buildSurfaceState()),
+            ),
+          ),
+          _CanvasFooter(state: _state),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSurfaceState() {
+    final PrototypeSnapshot snapshot = _state.snapshot;
+    if (_state.status == StudioGenerationStatus.generating) {
+      return const _EmptyCanvas(
+        icon: Icons.architecture,
+        title: 'Compondo o contrato…',
+        description: 'O motor está organizando componentes e propriedades.',
+      );
+    }
+    if (snapshot.status == PrototypeStatus.invalid) {
+      return _InvalidCanvas(issues: snapshot.issues);
+    }
+    if (snapshot.document == null) {
+      return const _EmptyCanvas(
+        icon: Icons.grid_view_outlined,
+        title: 'A prancheta está livre',
+        description: 'Envie um briefing para iniciar a primeira composição.',
+      );
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8F5),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: FoundryColors.ink, width: 1.4),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: FoundryColors.ink.withOpacity(0.12),
+            blurRadius: 30,
+            offset: const Offset(8, 12),
+          ),
+        ],
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(34),
+        child: Theme(
+          data: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF176B51),
+              brightness: Brightness.light,
+            ),
+          ),
+          child: PrototypeSurface(
+            document: snapshot.document!,
+            catalog: widget.catalog,
+            onAction: (PrototypeActionEvent event) {
+              widget.session.recordAction(
+                name: event.name,
+                componentId: event.componentId,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _useSuggestion(String prompt) {
+    _promptController.text = prompt;
+    _sendPrompt();
+  }
+
+  void _sendPrompt() {
+    final String prompt = _promptController.text;
+    _promptController.clear();
+    widget.session.sendPrompt(prompt);
+  }
+
+  void _showContract() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext context) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760, maxHeight: 680),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const Text(
+                  'PROTOTYPE SPEC / 1.0',
+                  style: TextStyle(
+                    fontFamily: 'Consolas',
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    color: FoundryColors.ink,
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        _state.snapshot.rawResponse,
+                        style: const TextStyle(
+                          fontFamily: 'Consolas',
+                          color: Color(0xFFE7F4EA),
+                          fontSize: 12,
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('FECHAR'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.state, required this.agentLabel});
+
+  final StudioState state;
+  final String agentLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 16, 22, 18),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 42,
+            height: 42,
+            decoration: const BoxDecoration(
+              color: FoundryColors.orange,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.gesture, color: FoundryColors.ink),
+          ),
+          const SizedBox(width: 13),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'PROTOTYPE FOUNDRY',
+                style: TextStyle(
+                  fontFamily: 'Georgia',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                'Contract-first product lab',
+                style: TextStyle(fontSize: 11, letterSpacing: 0.8),
+              ),
+            ],
+          ),
+          const Spacer(),
+          if (MediaQuery.of(context).size.width > 700) ...<Widget>[
+            const _Stamp(label: 'SPEC 1.0', color: FoundryColors.blue),
+            const SizedBox(width: 8),
+            _Stamp(label: agentLabel.toUpperCase(), color: FoundryColors.ink),
+            const SizedBox(width: 8),
+          ],
+          _StatusMark(status: state.status),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentSelector extends StatelessWidget {
+  const _AgentSelector({
+    required this.agents,
+    required this.selectedId,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final List<PrototypeAgent> agents;
+  final String selectedId;
+  final bool enabled;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final PrototypeAgent selected = agents.firstWhere(
+      (PrototypeAgent agent) => agent.id == selectedId,
+    );
+    return PopupMenuButton<String>(
+      key: const Key('agent-selector'),
+      enabled: enabled,
+      tooltip: 'Selecionar motor de geração',
+      onSelected: onSelected,
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+        for (final PrototypeAgent agent in agents)
+          PopupMenuItem<String>(
+            value: agent.id,
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  agent.id == selectedId
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  size: 17,
+                  color: agent.id == selectedId
+                      ? FoundryColors.orange
+                      : FoundryColors.ink,
+                ),
+                const SizedBox(width: 9),
+                Text(agent.label),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          border: Border.all(color: FoundryColors.ink),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(Icons.hub_outlined, size: 15),
+            const SizedBox(width: 6),
+            Text(
+              selected.label.toUpperCase(),
+              style: const TextStyle(
+                fontFamily: 'Consolas',
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(width: 3),
+            const Icon(Icons.expand_more, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FramedPanel extends StatelessWidget {
+  const _FramedPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: FoundryColors.paperLight,
+        border: Border.all(color: FoundryColors.ink, width: 1.4),
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: FoundryColors.ink.withOpacity(0.08),
+            offset: const Offset(4, 5),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _PanelHeading extends StatelessWidget {
+  const _PanelHeading({
+    required this.index,
+    required this.eyebrow,
+    required this.title,
+    this.trailing,
+  });
+
+  final String index;
+  final String eyebrow;
+  final String title;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border.all(color: FoundryColors.ink),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              index,
+              style: const TextStyle(
+                fontFamily: 'Consolas',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  eyebrow,
+                  style: const TextStyle(
+                    fontFamily: 'Consolas',
+                    color: FoundryColors.orange,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) trailing!,
+        ],
+      ),
+    );
+  }
+}
+
+class _MessageCard extends StatelessWidget {
+  const _MessageCard({required this.message});
+
+  final StudioMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool user = message.role == StudioMessageRole.user;
+    final bool error = message.role == StudioMessageRole.error;
+    final bool system = message.role == StudioMessageRole.system;
+    return Align(
+      alignment: user ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 310),
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: user
+              ? FoundryColors.ink
+              : error
+                  ? const Color(0xFFFFE1D8)
+                  : system
+                      ? const Color(0xFFDDE6FA)
+                      : const Color(0xFFE8E1D2),
+          border: Border.all(
+            color: error ? FoundryColors.orange : FoundryColors.ink,
+          ),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(3),
+            topRight: const Radius.circular(3),
+            bottomLeft: Radius.circular(user ? 3 : 14),
+            bottomRight: Radius.circular(user ? 14 : 3),
+          ),
+        ),
+        child: Text(
+          message.text,
+          style: TextStyle(
+            color: user ? Colors.white : FoundryColors.ink,
+            fontSize: 13,
+            height: 1.4,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Suggestion extends StatelessWidget {
+  const _Suggestion({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          border: Border.all(color: FoundryColors.line),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(label, style: const TextStyle(fontSize: 11)),
+      ),
+    );
+  }
+}
+
+class _CanvasFooter extends StatelessWidget {
+  const _CanvasFooter({required this.state});
+
+  final StudioState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: FoundryColors.ink)),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.lock_outline, size: 14),
+          const SizedBox(width: 6),
+          const Expanded(
+            child: Text(
+              'Somente componentes registrados · nenhuma execução de código',
+              style: TextStyle(fontSize: 10),
+            ),
+          ),
+          Text(
+            state.snapshot.document == null
+                ? 'SEM REVISÃO'
+                : state.snapshot.document!.screen.id.toUpperCase(),
+            style: const TextStyle(
+              fontFamily: 'Consolas',
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyCanvas extends StatelessWidget {
+  const _EmptyCanvas({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: 70,
+          height: 70,
+          decoration: BoxDecoration(
+            color: FoundryColors.orange,
+            shape: BoxShape.circle,
+            border: Border.all(color: FoundryColors.ink, width: 1.4),
+          ),
+          child: Icon(icon, size: 30),
+        ),
+        const SizedBox(height: 20),
+        Text(title, style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 7),
+        Text(
+          description,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: FoundryColors.muted),
+        ),
+      ],
+    );
+  }
+}
+
+class _InvalidCanvas extends StatelessWidget {
+  const _InvalidCanvas({required this.issues});
+
+  final List<ValidationIssue> issues;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 620),
+      padding: const EdgeInsets.all(24),
+      color: const Color(0xFFFFE1D8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text('Contrato rejeitado',
+              style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          for (final ValidationIssue issue in issues)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('• ${issue.path}: ${issue.message}'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Stamp extends StatelessWidget {
+  const _Stamp({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: -0.018,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(border: Border.all(color: color, width: 1.4)),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontFamily: 'Consolas',
+            fontWeight: FontWeight.w700,
+            fontSize: 10,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusMark extends StatelessWidget {
+  const _StatusMark({required this.status});
+
+  final StudioGenerationStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool working = status == StudioGenerationStatus.generating;
+    final bool failed = status == StudioGenerationStatus.failed ||
+        status == StudioGenerationStatus.invalid;
+    final Color color = failed
+        ? FoundryColors.orange
+        : working
+            ? FoundryColors.blue
+            : FoundryColors.success;
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: FoundryColors.ink),
+      ),
+    );
+  }
+}
+
+class _BlueprintGrid extends StatelessWidget {
+  const _BlueprintGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _GridPainter());
+  }
+}
+
+class _GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint minor = Paint()
+      ..color = FoundryColors.line.withOpacity(0.28)
+      ..strokeWidth = 0.7;
+    const double step = 24;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), minor);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), minor);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}

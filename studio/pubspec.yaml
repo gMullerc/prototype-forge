@@ -1,0 +1,31 @@
+name: prototype_foundry_studio
+description: Contract-first product prototype workbench.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  prototype_agent:
+    path: ../foundry/packages/prototype_agent
+  prototype_flutter:
+    path: ../foundry/packages/prototype_flutter
+  prototype_gateway_client:
+    path: ../foundry/packages/prototype_gateway_client
+  prototype_material_catalog:
+    path: ../foundry/packages/prototype_material_catalog
+  prototype_runtime:
+    path: ../foundry/packages/prototype_runtime
+  prototype_spec:
+    path: ../foundry/packages/prototype_spec
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

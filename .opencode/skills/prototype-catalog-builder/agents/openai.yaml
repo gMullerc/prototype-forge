@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prototype Catalog Builder"
+  short_description: "Create or extend safe Flutter catalogs"
+  default_prompt: "Use $prototype-catalog-builder to register this Flutter component in the appropriate Prototype Foundry catalog."

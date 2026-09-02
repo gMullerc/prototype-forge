@@ -1,0 +1,15 @@
+name: prototype_runtime
+description: Validation and state engine for Prototype Foundry.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  prototype_spec:
+    path: ../prototype_spec
+
+dev_dependencies:
+  test: ^1.25.8
+
