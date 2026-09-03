@@ -1,0 +1,4 @@
+enum PrototypeSurfaceMode {
+  interactive,
+  inspect,
+}

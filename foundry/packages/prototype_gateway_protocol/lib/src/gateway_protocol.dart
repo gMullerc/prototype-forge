@@ -1,6 +1,7 @@
 const String gatewayProtocolVersion = '1';
 const String gatewayHealthPath = '/v1/health';
 const String gatewayGeneratePath = '/v1/generate';
+const String gatewayToolsPath = '/v1/tools';
 
 class GatewayProtocolException implements FormatException {
   const GatewayProtocolException(this.message, [this.source, this.offset]);
@@ -19,7 +20,7 @@ class GatewayProtocolException implements FormatException {
 }
 
 Map<String, Object?> gatewayMap(Object? value, String field) {
-  if (value is! Map<Object?, Object?>) {
+  if (value is! Map) {
     throw GatewayProtocolException('$field precisa ser um objeto.');
   }
   final Map<String, Object?> result = <String, Object?>{};

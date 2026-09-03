@@ -48,6 +48,17 @@ class GeneratePrototype {
         conversationId: request.conversationId,
       ),
     );
+    final ProviderClarification? clarification = generated.clarification;
+    if (clarification != null) {
+      return GatewayGenerateResponse.clarification(
+        providerId: provider.id,
+        conversationId: generated.conversationId,
+        clarification: GatewayClarification(
+          question: clarification.question,
+          options: clarification.options,
+        ),
+      );
+    }
     return GatewayGenerateResponse(
       providerId: provider.id,
       conversationId: generated.conversationId,

@@ -122,6 +122,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  prototype_interaction:
+    dependency: "direct main"
+    description:
+      path: "../prototype_interaction"
+      relative: true
+    source: path
+    version: "0.1.0"
   prototype_runtime:
     dependency: "direct main"
     description:

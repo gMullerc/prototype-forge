@@ -9,14 +9,14 @@ class OpenCodeConfiguration {
     required this.providerId,
     required this.modelId,
     this.variant,
-    this.generationTimeout = const Duration(seconds: 90),
+    this.generationTimeout = const Duration(seconds: 150),
   });
 
   factory OpenCodeConfiguration.fromEnvironment(
     Map<String, String> environment,
   ) {
     final String model =
-        environment['PROTOTYPE_OPENCODE_MODEL'] ?? 'openai/gpt-5.4-mini';
+        environment['PROTOTYPE_OPENCODE_MODEL'] ?? 'openai/gpt-5.6-luna';
     final int separator = model.indexOf('/');
     if (separator <= 0 || separator == model.length - 1) {
       throw FormatException(
@@ -25,7 +25,7 @@ class OpenCodeConfiguration {
     }
     final int generationTimeoutSeconds = _positiveInt(
       environment['PROTOTYPE_OPENCODE_TIMEOUT_SECONDS'],
-      defaultValue: 90,
+      defaultValue: 150,
       variableName: 'PROTOTYPE_OPENCODE_TIMEOUT_SECONDS',
     );
     return OpenCodeConfiguration(

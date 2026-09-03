@@ -4,12 +4,19 @@ import 'dart:io';
 import 'package:prototype_local_gateway/application/generate_prototype.dart';
 import 'package:prototype_local_gateway/application/prototype_contract_builder.dart';
 import 'package:prototype_local_gateway/domain/prototype_provider.dart';
+import 'package:prototype_local_gateway/infrastructure/copilot/copilot_cli_client.dart';
+import 'package:prototype_local_gateway/infrastructure/copilot/copilot_configuration.dart';
+import 'package:prototype_local_gateway/infrastructure/copilot/copilot_process_runner.dart';
+import 'package:prototype_local_gateway/infrastructure/copilot/copilot_provider.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/json_http_transport.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/opencode_api_client.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/opencode_configuration.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/opencode_host.dart';
 import 'package:prototype_local_gateway/infrastructure/opencode/opencode_provider.dart';
+import 'package:prototype_local_gateway/infrastructure/tools/process_tool_probe.dart';
+import 'package:prototype_local_gateway/infrastructure/tools/tool_inventory.dart';
 import 'package:prototype_local_gateway/interface/http/local_gateway_server.dart';
+import 'package:prototype_tool_discovery/prototype_tool_discovery.dart';
 
 Future<void> main() async {
   final Map<String, String> environment = Platform.environment;
@@ -28,8 +35,18 @@ Future<void> main() async {
       transport: transport,
     ),
   );
+  final DartCopilotProcessRunner copilotRunner = DartCopilotProcessRunner();
+  final CopilotPrototypeProvider copilot = CopilotPrototypeProvider(
+    client: CopilotCliClient(
+      configuration: CopilotConfiguration.fromEnvironment(environment),
+      runner: copilotRunner,
+    ),
+  );
   final PrototypeProviderRegistry providers =
-      PrototypeProviderRegistry(<PrototypeProvider>[provider]);
+      PrototypeProviderRegistry(<PrototypeProvider>[provider, copilot]);
+  final ToolInventory toolInventory = ToolInventory(
+    LocalToolDiscovery(probe: const ProcessToolProbe()),
+  );
   final Completer<void> done = Completer<void>();
   var closing = false;
   late final LocalGatewayServer server;
@@ -54,6 +71,7 @@ Future<void> main() async {
       contractBuilder: const PrototypeSpecContractBuilder(),
     ),
     providers: providers,
+    toolInventory: toolInventory,
     shutdownToken: environment['PROTOTYPE_GATEWAY_SHUTDOWN_TOKEN'],
     onShutdown: shutdown,
   );

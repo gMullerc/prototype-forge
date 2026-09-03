@@ -5,10 +5,12 @@ import 'package:prototype_agent/prototype_agent.dart';
 import 'package:prototype_export/prototype_export.dart';
 import 'package:prototype_flutter/prototype_flutter.dart';
 import 'package:prototype_runtime/prototype_runtime.dart';
+import 'package:prototype_tool_discovery/prototype_tool_discovery.dart';
 import 'package:prototype_workspace/prototype_workspace.dart';
 
 import '../application/studio_session.dart';
 import '../domain/studio_message.dart';
+import '../infrastructure/workspace_transfer/workspace_transfer.dart';
 import 'contract_rejection_panel.dart';
 import 'export_draft_dialog.dart';
 import 'foundry_theme.dart';
@@ -35,10 +37,14 @@ class StudioPage extends StatefulWidget {
     super.key,
     required this.session,
     required this.catalog,
+    this.workspaceTransfer,
+    this.toolDiscovery,
   });
 
   final StudioSession session;
   final FlutterPrototypeCatalog catalog;
+  final WorkspaceTransfer? workspaceTransfer;
+  final ToolDiscovery? toolDiscovery;
 
   @override
   State<StudioPage> createState() => _StudioPageState();
@@ -50,6 +56,9 @@ class _StudioPageState extends State<StudioPage> {
   late StudioState _state = widget.session.current;
   StreamSubscription<StudioState>? _subscription;
   _PreviewViewport _viewport = _PreviewViewport.phone;
+  PrototypeSurfaceMode _surfaceMode = PrototypeSurfaceMode.interactive;
+  late final WorkspaceTransfer _workspaceTransfer =
+      widget.workspaceTransfer ?? createWorkspaceTransfer();
 
   @override
   void initState() {
@@ -86,12 +95,19 @@ class _StudioPageState extends State<StudioPage> {
           SafeArea(
             child: Column(
               children: <Widget>[
-                _Header(state: _state, agentLabel: widget.session.agent.label),
+                _Header(
+                  state: _state,
+                  agentLabel: widget.session.agent.label,
+                  onOpenTools:
+                      widget.toolDiscovery == null ? null : _showToolInventory,
+                ),
                 _ProjectBar(
                   state: _state,
                   onSelectProject: widget.session.selectProject,
                   onCreateProject: _createProject,
                   onOpenReview: _showReviewWorkspace,
+                  onExportWorkspace: _exportWorkspace,
+                  onImportWorkspace: _importWorkspace,
                 ),
                 Expanded(
                   child: LayoutBuilder(
@@ -129,6 +145,15 @@ class _StudioPageState extends State<StudioPage> {
     );
   }
 
+  Future<void> _showToolInventory() async {
+    final ToolDiscovery? discovery = widget.toolDiscovery;
+    if (discovery == null || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ToolInventoryDialog(discovery: discovery),
+    );
+  }
+
   Widget _buildBriefingPanel() {
     return _FramedPanel(
       child: Column(
@@ -152,8 +177,12 @@ class _StudioPageState extends State<StudioPage> {
               padding: const EdgeInsets.all(18),
               itemCount: _state.messages.length,
               separatorBuilder: (_, __) => const SizedBox(height: 14),
-              itemBuilder: (BuildContext context, int index) =>
-                  _MessageCard(message: _state.messages[index]),
+              itemBuilder: (BuildContext context, int index) => _MessageCard(
+                message: _state.messages[index],
+                onOptionSelected: (String option) {
+                  widget.session.sendPrompt(option);
+                },
+              ),
             ),
           ),
           Padding(
@@ -238,11 +267,14 @@ class _StudioPageState extends State<StudioPage> {
           const Divider(height: 1, color: FoundryColors.ink),
           _CanvasToolbar(
             viewport: _viewport,
+            mode: _surfaceMode,
             canReview: _state.activeProject?.revisions.isNotEmpty ?? false,
             canExport: _state.snapshot.status == PrototypeStatus.ready,
             canViewContract: _state.snapshot.rawResponse.isNotEmpty,
             onViewportChanged: (_PreviewViewport value) =>
                 setState(() => _viewport = value),
+            onModeChanged: (PrototypeSurfaceMode value) =>
+                setState(() => _surfaceMode = value),
             onReview: _showReviewWorkspace,
             onExport: _showExport,
             onViewContract: _showContract,
@@ -255,7 +287,7 @@ class _StudioPageState extends State<StudioPage> {
               child: Center(child: _buildSurfaceState()),
             ),
           ),
-          _CanvasFooter(state: _state),
+          _CanvasFooter(state: _state, mode: _surfaceMode),
         ],
       ),
     );
@@ -269,6 +301,15 @@ class _StudioPageState extends State<StudioPage> {
         title: 'Compondo o contrato…',
         description:
             'O motor está organizando componentes e propriedades. Toque no botão laranja para cancelar.',
+      );
+    }
+    if (_state.status == StudioGenerationStatus.awaitingClarification &&
+        snapshot.document == null) {
+      return const _EmptyCanvas(
+        icon: Icons.forum_outlined,
+        title: 'Aguardando sua resposta',
+        description:
+            'Responda à pergunta no briefing para que o agente conclua a composição.',
       );
     }
     if (snapshot.status == PrototypeStatus.invalid) {
@@ -322,11 +363,14 @@ class _StudioPageState extends State<StudioPage> {
               child: PrototypeSurface(
                 document: snapshot.document!,
                 catalog: widget.catalog,
+                mode: _surfaceMode,
                 onAction: (PrototypeActionEvent event) {
-                  widget.session.recordAction(
-                    name: event.name,
-                    componentId: event.componentId,
-                  );
+                  if (_surfaceMode == PrototypeSurfaceMode.inspect) {
+                    widget.session.recordAction(
+                      name: event.name,
+                      componentId: event.componentId,
+                    );
+                  }
                 },
               ),
             ),
@@ -400,6 +444,39 @@ class _StudioPageState extends State<StudioPage> {
     }
   }
 
+  Future<void> _exportWorkspace() async {
+    try {
+      await _workspaceTransfer.downloadText(
+        filename: 'prototype-foundry-workspace.json',
+        contents: widget.session.exportWorkspaceJson(),
+      );
+      if (mounted) {
+        _showWorkspaceMessage('Backup do workspace exportado.');
+      }
+    } on Object catch (error) {
+      if (mounted) _showWorkspaceMessage('Não foi possível exportar: $error');
+    }
+  }
+
+  Future<void> _importWorkspace() async {
+    try {
+      final String? source = await _workspaceTransfer.pickText();
+      if (source == null) return;
+      await widget.session.importWorkspaceJson(source);
+      if (mounted) _showWorkspaceMessage('Backup importado com sucesso.');
+    } on FormatException catch (error) {
+      if (mounted) _showWorkspaceMessage('Backup inválido: ${error.message}');
+    } on Object catch (error) {
+      if (mounted) _showWorkspaceMessage('Não foi possível importar: $error');
+    }
+  }
+
+  void _showWorkspaceMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void _showContract() {
     showDialog<void>(
       context: context,
@@ -460,16 +537,22 @@ class _ProjectBar extends StatelessWidget {
     required this.onSelectProject,
     required this.onCreateProject,
     required this.onOpenReview,
+    required this.onExportWorkspace,
+    required this.onImportWorkspace,
   });
 
   final StudioState state;
   final ValueChanged<String> onSelectProject;
   final VoidCallback onCreateProject;
   final VoidCallback onOpenReview;
+  final Future<void> Function() onExportWorkspace;
+  final Future<void> Function() onImportWorkspace;
 
   @override
   Widget build(BuildContext context) {
     final PrototypeProject? project = state.activeProject;
+    final bool generationInProgress =
+        state.status == StudioGenerationStatus.generating;
     return Container(
       height: 48,
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
@@ -518,16 +601,18 @@ class _ProjectBar extends StatelessWidget {
                         ),
                       ),
                   ],
-                  onChanged: (String? value) {
-                    if (value != null) onSelectProject(value);
-                  },
+                  onChanged: generationInProgress
+                      ? null
+                      : (String? value) {
+                          if (value != null) onSelectProject(value);
+                        },
                 ),
               ),
             ),
             const SizedBox(width: 8),
             TextButton.icon(
               key: const Key('quick-new-project-button'),
-              onPressed: onCreateProject,
+              onPressed: generationInProgress ? null : onCreateProject,
               icon: const Icon(Icons.add, size: 16),
               label: const Text('NOVO'),
             ),
@@ -542,6 +627,29 @@ class _ProjectBar extends StatelessWidget {
                     ? 'REVISÕES'
                     : 'REVISÕES · ${project.revisions.length}',
               ),
+            ),
+            PopupMenuButton<String>(
+              key: const Key('workspace-menu'),
+              tooltip: 'Backup do workspace local',
+              onSelected: (String action) {
+                if (action == 'export') {
+                  unawaited(onExportWorkspace());
+                } else {
+                  unawaited(onImportWorkspace());
+                }
+              },
+              itemBuilder: (BuildContext context) =>
+                  const <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  value: 'export',
+                  child: Text('Exportar backup'),
+                ),
+                PopupMenuItem<String>(
+                  value: 'import',
+                  child: Text('Importar backup'),
+                ),
+              ],
+              icon: const Icon(Icons.more_horiz, size: 18),
             ),
             const SizedBox(width: 8),
             Container(
@@ -570,20 +678,24 @@ class _ProjectBar extends StatelessWidget {
 class _CanvasToolbar extends StatelessWidget {
   const _CanvasToolbar({
     required this.viewport,
+    required this.mode,
     required this.canReview,
     required this.canExport,
     required this.canViewContract,
     required this.onViewportChanged,
+    required this.onModeChanged,
     required this.onReview,
     required this.onExport,
     required this.onViewContract,
   });
 
   final _PreviewViewport viewport;
+  final PrototypeSurfaceMode mode;
   final bool canReview;
   final bool canExport;
   final bool canViewContract;
   final ValueChanged<_PreviewViewport> onViewportChanged;
+  final ValueChanged<PrototypeSurfaceMode> onModeChanged;
   final VoidCallback onReview;
   final VoidCallback onExport;
   final VoidCallback onViewContract;
@@ -619,6 +731,34 @@ class _CanvasToolbar extends StatelessWidget {
             const SizedBox(width: 10),
             Container(width: 1, height: 22, color: FoundryColors.line),
             const SizedBox(width: 8),
+            const Text(
+              'MODO',
+              style: TextStyle(
+                fontFamily: 'Consolas',
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                color: FoundryColors.muted,
+              ),
+            ),
+            const SizedBox(width: 7),
+            _SurfaceModeButton(
+              key: const Key('surface-mode-interactive'),
+              label: 'INTERAGIR',
+              icon: Icons.touch_app_outlined,
+              selected: mode == PrototypeSurfaceMode.interactive,
+              onPressed: () => onModeChanged(PrototypeSurfaceMode.interactive),
+            ),
+            const SizedBox(width: 4),
+            _SurfaceModeButton(
+              key: const Key('surface-mode-inspect'),
+              label: 'INSPECIONAR',
+              icon: Icons.manage_search_outlined,
+              selected: mode == PrototypeSurfaceMode.inspect,
+              onPressed: () => onModeChanged(PrototypeSurfaceMode.inspect),
+            ),
+            const SizedBox(width: 10),
+            Container(width: 1, height: 22, color: FoundryColors.line),
+            const SizedBox(width: 8),
             TextButton.icon(
               onPressed: canReview ? onReview : null,
               icon: const Icon(Icons.compare_outlined, size: 16),
@@ -638,6 +778,36 @@ class _CanvasToolbar extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SurfaceModeButton extends StatelessWidget {
+  const _SurfaceModeButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: selected ? FoundryColors.ink : Colors.transparent,
+        foregroundColor: selected ? Colors.white : FoundryColors.ink,
+        side: const BorderSide(color: FoundryColors.ink),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+      ),
+      icon: Icon(icon, size: 14),
+      label: Text(label, style: const TextStyle(fontSize: 10)),
     );
   }
 }
@@ -702,10 +872,15 @@ class _RevisionBadge extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.state, required this.agentLabel});
+  const _Header({
+    required this.state,
+    required this.agentLabel,
+    this.onOpenTools,
+  });
 
   final StudioState state;
   final String agentLabel;
+  final VoidCallback? onOpenTools;
 
   @override
   Widget build(BuildContext context) {
@@ -742,14 +917,218 @@ class _Header extends StatelessWidget {
           ),
           const Spacer(),
           if (MediaQuery.of(context).size.width > 700) ...<Widget>[
-            const _Stamp(label: 'SPEC 1.0', color: FoundryColors.blue),
+            const _Stamp(label: 'SPEC 1.1', color: FoundryColors.blue),
             const SizedBox(width: 8),
             _Stamp(label: agentLabel.toUpperCase(), color: FoundryColors.ink),
             const SizedBox(width: 8),
           ],
+          IconButton(
+            key: const Key('tool-discovery-button'),
+            onPressed: onOpenTools,
+            tooltip: 'Ferramentas disponíveis neste computador',
+            icon: const Icon(Icons.devices_other_outlined, size: 18),
+          ),
+          const SizedBox(width: 4),
           _StatusMark(status: state.status),
         ],
       ),
+    );
+  }
+}
+
+class _ToolInventoryDialog extends StatefulWidget {
+  const _ToolInventoryDialog({required this.discovery});
+
+  final ToolDiscovery discovery;
+
+  @override
+  State<_ToolInventoryDialog> createState() => _ToolInventoryDialogState();
+}
+
+class _ToolInventoryDialogState extends State<_ToolInventoryDialog> {
+  List<DiscoveredTool> _tools = const <DiscoveredTool>[];
+  Object? _error;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final List<DiscoveredTool> tools = await widget.discovery.discover();
+      if (!mounted) return;
+      setState(() {
+        _tools = tools;
+        _loading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Ferramentas deste computador'),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const Text(
+              'A detecção consulta apenas executáveis acessíveis no PATH. '
+              'Tokens, keychains e arquivos de credenciais não são lidos.',
+              style: TextStyle(fontSize: 12, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            if (_loading && _tools.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_error != null)
+              _ToolInventoryError(error: _error!, onRetry: _refresh)
+            else ...<Widget>[
+              for (final DiscoveredTool tool in _tools)
+                _ToolInventoryRow(tool: tool),
+              if (_loading) const LinearProgressIndicator(minHeight: 2),
+            ],
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton.icon(
+          onPressed: _loading ? null : _refresh,
+          icon: const Icon(Icons.refresh, size: 16),
+          label: const Text('ATUALIZAR'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('FECHAR'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ToolInventoryRow extends StatelessWidget {
+  const _ToolInventoryRow({required this.tool});
+
+  final DiscoveredTool tool;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool available = tool.availability == ToolAvailability.available;
+    final bool failed = tool.availability == ToolAvailability.probeError;
+    final Color color = available
+        ? FoundryColors.success
+        : failed
+            ? FoundryColors.orange
+            : FoundryColors.muted;
+    final String state = available
+        ? 'DETECTADA'
+        : failed
+            ? 'ERRO NO PROBE'
+            : 'NÃO INSTALADA';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            available
+                ? Icons.check_circle_outline
+                : failed
+                    ? Icons.warning_amber_outlined
+                    : Icons.radio_button_unchecked,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(child: Text(tool.definition.label)),
+                    Text(
+                      state,
+                      style: TextStyle(
+                        color: color,
+                        fontFamily: 'Consolas',
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tool.version ??
+                      (available
+                          ? tool.diagnostic ?? 'Executável acessível no PATH.'
+                          : 'Comando: ${tool.definition.executable}'),
+                  style: const TextStyle(
+                    color: FoundryColors.muted,
+                    fontSize: 11,
+                  ),
+                ),
+                if (!available && tool.definition.setupHint != null)
+                  Text(
+                    'Configuração manual: ${tool.definition.setupHint}',
+                    style: const TextStyle(
+                      color: FoundryColors.muted,
+                      fontFamily: 'Consolas',
+                      fontSize: 10,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolInventoryError extends StatelessWidget {
+  const _ToolInventoryError({required this.error, required this.onRetry});
+
+  final Object error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        const Icon(Icons.cloud_off_outlined, size: 28),
+        const SizedBox(height: 8),
+        const Text(
+          'Não foi possível consultar o gateway local.',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$error',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: FoundryColors.muted, fontSize: 11),
+        ),
+        const SizedBox(height: 10),
+        TextButton(onPressed: onRetry, child: const Text('TENTAR NOVAMENTE')),
+      ],
     );
   }
 }
@@ -920,9 +1299,13 @@ class _PanelHeading extends StatelessWidget {
 }
 
 class _MessageCard extends StatelessWidget {
-  const _MessageCard({required this.message});
+  const _MessageCard({
+    required this.message,
+    required this.onOptionSelected,
+  });
 
   final StudioMessage message;
+  final ValueChanged<String> onOptionSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -952,13 +1335,41 @@ class _MessageCard extends StatelessWidget {
             bottomRight: Radius.circular(user ? 14 : 3),
           ),
         ),
-        child: Text(
-          message.text,
-          style: TextStyle(
-            color: user ? Colors.white : FoundryColors.ink,
-            fontSize: 13,
-            height: 1.4,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              message.text,
+              style: TextStyle(
+                color: user ? Colors.white : FoundryColors.ink,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            if (message.options.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: <Widget>[
+                  for (final String option in message.options)
+                    OutlinedButton(
+                      onPressed: () => onOptionSelected(option),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: FoundryColors.ink,
+                        side: const BorderSide(color: FoundryColors.ink),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        textStyle: const TextStyle(fontSize: 11),
+                      ),
+                      child: Text(option),
+                    ),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -989,9 +1400,10 @@ class _Suggestion extends StatelessWidget {
 }
 
 class _CanvasFooter extends StatelessWidget {
-  const _CanvasFooter({required this.state});
+  const _CanvasFooter({required this.state, required this.mode});
 
   final StudioState state;
+  final PrototypeSurfaceMode mode;
 
   @override
   Widget build(BuildContext context) {
@@ -1004,10 +1416,14 @@ class _CanvasFooter extends StatelessWidget {
         children: <Widget>[
           const Icon(Icons.lock_outline, size: 14),
           const SizedBox(width: 6),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Somente componentes registrados · nenhuma execução de código',
-              style: TextStyle(fontSize: 10),
+              state.status == StudioGenerationStatus.awaitingClarification
+                  ? 'Aguardando resposta do briefing'
+                  : mode == PrototypeSurfaceMode.interactive
+                      ? 'Interação declarativa local · nenhuma execução de código'
+                      : 'Inspeção de eventos · nenhuma execução de código',
+              style: const TextStyle(fontSize: 10),
             ),
           ),
           Text(
@@ -1102,11 +1518,12 @@ class _StatusMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool working = status == StudioGenerationStatus.generating;
+    final bool waiting = status == StudioGenerationStatus.awaitingClarification;
     final bool failed = status == StudioGenerationStatus.failed ||
         status == StudioGenerationStatus.invalid;
     final Color color = failed
         ? FoundryColors.orange
-        : working
+        : working || waiting
             ? FoundryColors.blue
             : FoundryColors.success;
     return Container(

@@ -41,4 +41,27 @@ void main() {
       throwsA(isA<GatewayProtocolException>()),
     );
   });
+
+  test('round-trips a clarification response with selectable options', () {
+    final GatewayGenerateResponse response =
+        GatewayGenerateResponse.clarification(
+      providerId: 'opencode',
+      conversationId: 'session-1',
+      clarification: const GatewayClarification(
+        question: 'A tela deve permitir editar registros?',
+        options: <String>['Somente criar', 'Criar e editar'],
+      ),
+    );
+
+    final GatewayGenerateResponse decoded =
+        GatewayGenerateResponse.fromJson(response.toJson());
+
+    expect(decoded.isClarification, isTrue);
+    expect(decoded.clarification?.question,
+        'A tela deve permitir editar registros?');
+    expect(decoded.clarification?.options, <String>[
+      'Somente criar',
+      'Criar e editar',
+    ]);
+  });
 }

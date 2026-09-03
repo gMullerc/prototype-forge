@@ -35,6 +35,24 @@ void main() {
     expect(_containsType(document, 'ListItem'), isTrue);
   });
 
+  test('creates an interactive person registration scenario', () async {
+    final Map<String, Object?> document = await _decode(
+      agent.generate(
+        const PrototypeBrief(
+          text: 'Crie um cadastro de pessoas com CPF e CNPJ',
+        ),
+      ),
+    );
+
+    expect(document['specVersion'], '1.1');
+    expect(document['interaction'], isA<Map<String, Object?>>());
+    expect(_containsType(document, 'TextField'), isTrue);
+    expect(
+      jsonEncode(document),
+      allOf(contains('visibleWhen'), contains('save_person')),
+    );
+  });
+
   test('allows a scenario to be added without changing the agent', () async {
     final LocalPrototypeAgent configurableAgent = LocalPrototypeAgent(
       scenarioRegistry: LocalPrototypeScenarioRegistry(

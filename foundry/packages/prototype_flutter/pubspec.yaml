@@ -10,6 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  prototype_interaction:
+    path: ../prototype_interaction
   prototype_runtime:
     path: ../prototype_runtime
   prototype_spec:
@@ -18,4 +20,3 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-

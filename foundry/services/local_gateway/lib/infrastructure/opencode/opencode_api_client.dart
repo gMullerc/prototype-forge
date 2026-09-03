@@ -23,45 +23,62 @@ class OpenCodeApiClient {
   ) async {
     await _host.ensureReady();
     final String sessionId = input.conversationId ?? await _createSession();
-    final Object? payload = await _send(
-      method: 'POST',
-      uri: _uri('/session/${Uri.encodeComponent(sessionId)}/message'),
-      timeout: _configuration.generationTimeout,
-      body: <String, Object?>{
-        'model': <String, Object?>{
-          'providerID': _configuration.providerId,
-          'modelID': _configuration.modelId,
+    Object? payload;
+    try {
+      payload = await _send(
+        method: 'POST',
+        uri: _uri('/session/${Uri.encodeComponent(sessionId)}/message'),
+        timeout: _configuration.generationTimeout,
+        body: <String, Object?>{
+          'model': <String, Object?>{
+            'providerID': _configuration.providerId,
+            'modelID': _configuration.modelId,
+          },
+          'agent': 'plan',
+          'system': input.systemPrompt,
+          'tools': _disabledTools,
+          if (_configuration.variant != null) 'variant': _configuration.variant,
+          'parts': <Object?>[
+            <String, Object?>{'type': 'text', 'text': input.userPrompt},
+          ],
         },
-        'agent': 'plan',
-        'system': input.systemPrompt,
-        'tools': _disabledTools,
-        'format': <String, Object?>{
-          'type': 'json_schema',
-          // The complete catalog schema is recursive and intentionally stays
-          // in the Foundry validator. OpenCode receives only the document
-          // envelope so structured output remains reliable across models;
-          // component types, properties and actions are validated afterward.
-          'schema': _structuredOutputSchema,
-          // OpenCode asks the model to repair the structured response before
-          // returning it to the gateway.
-          'retryCount': 2,
-        },
-        if (_configuration.variant != null) 'variant': _configuration.variant,
-        'parts': <Object?>[
-          <String, Object?>{'type': 'text', 'text': input.userPrompt},
-        ],
-      },
-    );
+      );
+    } on ProviderGenerationException catch (error) {
+      if (error.code == 'provider_timeout') {
+        // OpenCode can publish the assistant's final text before the HTTP
+        // request finishes. Recover that turn before aborting so a slow
+        // transport does not discard an otherwise valid contract.
+        try {
+          return await _recoverTurnFromSession(sessionId);
+        } on ProviderGenerationException {
+          await _abortSession(sessionId);
+        }
+      }
+      rethrow;
+    }
     final Map<String, Object?> response = _map(payload, 'resposta');
     final Map<String, Object?> info = _map(response['info'], 'info');
     if (info['error'] != null) {
-      throw _generationExceptionFor(info['error']);
+      final ProviderGenerationException error =
+          _generationExceptionFor(info['error']);
+      if (error.code == 'provider_response_invalid') {
+        try {
+          return await _recoverTurnFromSession(sessionId);
+        } on ProviderGenerationException {
+          // Preserve the provider error when the session has no recoverable
+          // assistant turn yet.
+        }
+      }
+      throw error;
     }
-    final Map<String, Object?> document = _extractDocument(response, info);
-    return ProviderGenerationOutput(
-      conversationId: sessionId,
-      document: document,
-    );
+    late final ProviderGenerationOutput generated;
+    try {
+      generated = _extractTurn(response, info, sessionId);
+    } on ProviderGenerationException catch (error) {
+      if (error.code != 'provider_response_invalid') rethrow;
+      generated = await _recoverTurnFromSession(sessionId);
+    }
+    return generated;
   }
 
   Future<String> _createSession() async {
@@ -71,19 +88,6 @@ class OpenCodeApiClient {
       timeout: const Duration(seconds: 30),
       body: <String, Object?>{
         'title': 'Prototype Foundry',
-        'agent': 'plan',
-        'model': <String, Object?>{
-          'id': _configuration.modelId,
-          'providerID': _configuration.providerId,
-          if (_configuration.variant != null) 'variant': _configuration.variant,
-        },
-        'permission': <Object?>[
-          <String, Object?>{
-            'permission': '*',
-            'pattern': '*',
-            'action': 'deny',
-          },
-        ],
       },
     );
     final Map<String, Object?> session = _map(payload, 'sessão');
@@ -119,26 +123,63 @@ class OpenCodeApiClient {
     }
   }
 
-  Map<String, Object?> _extractDocument(
+  Future<void> _abortSession(String sessionId) async {
+    try {
+      await _transport.send(
+        method: 'POST',
+        uri: _uri('/session/${Uri.encodeComponent(sessionId)}/abort'),
+        timeout: const Duration(seconds: 5),
+      );
+    } on Object {
+      // The timeout is already the actionable failure. Abort is best effort.
+    }
+  }
+
+  Future<ProviderGenerationOutput> _recoverTurnFromSession(
+    String sessionId,
+  ) async {
+    final Object? payload = await _send(
+      method: 'GET',
+      uri: _uri('/session/${Uri.encodeComponent(sessionId)}/message'),
+      timeout: const Duration(seconds: 15),
+    );
+    if (payload is! List) throw _invalidResponse();
+    for (final Object? value in payload.reversed) {
+      if (value is! Map) continue;
+      final Map<String, Object?> response = _map(value, 'mensagem');
+      final Object? infoValue = response['info'];
+      if (infoValue is! Map) continue;
+      final Map<String, Object?> info = _map(infoValue, 'info');
+      if (info['role'] != 'assistant') continue;
+      if (info['error'] != null) {
+        throw _generationExceptionFor(info['error']);
+      }
+      return _extractTurn(response, info, sessionId);
+    }
+    throw _invalidResponse();
+  }
+
+  ProviderGenerationOutput _extractTurn(
     Map<String, Object?> response,
     Map<String, Object?> info,
+    String sessionId,
   ) {
     final Object? structured = info['structured'] ?? info['structured_output'];
     if (structured is Map<Object?, Object?>) {
-      return _map(structured, 'documento estruturado');
+      return _turnFromMap(_map(structured, 'resposta estruturada'), sessionId);
     }
     if (structured != null) {
       throw _invalidResponse();
     }
 
     final Object? partsValue = response['parts'];
-    if (partsValue is! List<Object?>) {
+    if (partsValue is! List) {
       throw _invalidResponse();
     }
     final String text = partsValue
-        .whereType<Map<Object?, Object?>>()
-        .where((Map<Object?, Object?> part) => part['type'] == 'text')
-        .map((Map<Object?, Object?> part) => part['text'])
+        .whereType<Map>()
+        .where((Map part) => part['type'] == 'text')
+        .map((Map part) => part['text'])
         .whereType<String>()
         .join('\n')
         .trim();
@@ -146,12 +187,48 @@ class OpenCodeApiClient {
       throw _invalidResponse();
     }
     try {
-      return _map(jsonDecode(_normalizeTextJson(text)), 'documento');
+      return _turnFromMap(
+        _map(jsonDecode(_normalizeTextJson(text)), 'resposta'),
+        sessionId,
+      );
     } on FormatException {
       throw _invalidResponse();
     } on StateError {
       throw _invalidResponse();
     }
+  }
+
+  ProviderGenerationOutput _turnFromMap(
+    Map<String, Object?> value,
+    String sessionId,
+  ) {
+    if (value['type'] == 'clarification') {
+      final Object? rawQuestion = value['question'];
+      final Object? rawOptions = value['options'];
+      if (rawQuestion is! String || rawQuestion.trim().isEmpty) {
+        throw _invalidResponse();
+      }
+      if (rawOptions != null &&
+          (rawOptions is! List ||
+              rawOptions.any((Object? option) => option is! String))) {
+        throw _invalidResponse();
+      }
+      final List<String> options = rawOptions == null
+          ? const <String>[]
+          : List<String>.from(rawOptions as List);
+      return ProviderGenerationOutput.clarification(
+        conversationId: sessionId,
+        question: rawQuestion,
+        options: options,
+      );
+    }
+    final Object? rawDocument =
+        value['type'] == 'contract' ? value['document'] : value;
+    if (rawDocument is! Map) throw _invalidResponse();
+    return ProviderGenerationOutput(
+      conversationId: sessionId,
+      document: _map(rawDocument, 'documento'),
+    );
   }
 
   ProviderGenerationException _generationExceptionFor(Object? error) {
@@ -215,16 +292,6 @@ class OpenCodeApiClient {
     return -1;
   }
 
-  static const Map<String, Object?> _structuredOutputSchema = <String, Object?>{
-    'type': 'object',
-    'properties': <String, Object?>{
-      'specVersion': <String, Object?>{'type': 'string'},
-      'screen': <String, Object?>{'type': 'object'},
-    },
-    'required': <String>['specVersion', 'screen'],
-    'additionalProperties': false,
-  };
-
   Uri _uri(String path) {
     final Uri uri = _configuration.baseUri.resolve(path);
     return uri.replace(
@@ -235,7 +302,7 @@ class OpenCodeApiClient {
   }
 
   Map<String, Object?> _map(Object? value, String name) {
-    if (value is! Map<Object?, Object?>) {
+    if (value is! Map) {
       throw StateError('$name do OpenCode não é um objeto JSON.');
     }
     return <String, Object?>{

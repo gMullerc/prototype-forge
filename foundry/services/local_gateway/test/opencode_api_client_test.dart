@@ -16,7 +16,7 @@ void main() {
         port: 4096,
         workspaceDirectory: 'workspace',
         providerId: 'openai',
-        modelId: 'gpt-5.4-mini',
+        modelId: 'gpt-5.6-luna',
       ),
       host: host,
       transport: transport,
@@ -33,29 +33,11 @@ void main() {
     expect(result.conversationId, 'ses_test');
     expect(result.document['specVersion'], '1.0');
     expect(host.ensureCalls, 1);
+    final Map<String, Object?> sessionBody = transport.bodies.first;
+    expect(sessionBody, <String, Object?>{'title': 'Prototype Foundry'});
     final Map<String, Object?> promptBody = transport.bodies.last;
-    expect(
-      promptBody['format'],
-      containsPair('type', 'json_schema'),
-    );
-    expect(
-      (promptBody['format'] as Map<String, Object?>)['schema'],
-      containsPair('type', 'object'),
-    );
-    final Map<String, Object?> transportSchema = (promptBody['format']
-        as Map<String, Object?>)['schema']! as Map<String, Object?>;
-    expect(
-      transportSchema['properties'],
-      containsPair('specVersion', containsPair('type', 'string')),
-    );
-    expect(
-      transportSchema['properties'],
-      containsPair('screen', containsPair('type', 'object')),
-    );
-    expect(
-      (promptBody['format'] as Map<String, Object?>)['retryCount'],
-      2,
-    );
+    expect(promptBody.containsKey('format'), isFalse);
+    expect(promptBody['system'], 'Retorne JSON');
     expect(promptBody['tools'], containsPair('bash', false));
   });
 
@@ -77,6 +59,47 @@ void main() {
     expect(result.document['screen'], isA<Map<Object?, Object?>>());
   });
 
+  test('reads a clarification envelope returned by OpenCode', () async {
+    final OpenCodeApiClient client = OpenCodeApiClient(
+      configuration: _configuration,
+      host: _FakeOpenCodeHost(),
+      transport: _FakeJsonTransport(clarification: true),
+    );
+
+    final ProviderGenerationOutput result = await client.generate(
+      const ProviderGenerationInput(
+        userPrompt: 'Crie uma tela',
+        systemPrompt: 'Retorne uma pergunta JSON',
+        outputSchema: <String, Object?>{'type': 'object'},
+      ),
+    );
+
+    expect(result.isClarification, isTrue);
+    expect(result.clarification?.question, contains('editar'));
+    expect(result.clarification?.options, <String>[
+      'Somente criar',
+      'Criar e editar',
+    ]);
+  });
+
+  test('recovers completed text from the session when POST omits it', () async {
+    final OpenCodeApiClient client = OpenCodeApiClient(
+      configuration: _configuration,
+      host: _FakeOpenCodeHost(),
+      transport: _FakeJsonTransport(requiresSessionRecovery: true),
+    );
+
+    final ProviderGenerationOutput result = await client.generate(
+      const ProviderGenerationInput(
+        userPrompt: 'Crie uma tela',
+        systemPrompt: 'Retorne JSON',
+        outputSchema: <String, Object?>{'type': 'object'},
+      ),
+    );
+
+    expect(result.document['specVersion'], '1.0');
+  });
+
   test('classifies structured output failures as invalid responses', () async {
     final OpenCodeApiClient client = OpenCodeApiClient(
       configuration: _configuration,
@@ -84,8 +107,8 @@ void main() {
       transport: _FakeJsonTransport(structuredError: true),
     );
 
-    expect(
-      () => client.generate(
+    await expectLater(
+      client.generate(
         const ProviderGenerationInput(
           userPrompt: 'Crie uma tela',
           systemPrompt: 'Retorne JSON',
@@ -102,15 +125,35 @@ void main() {
     );
   });
 
-  test('classifies transport timeout as a provider timeout', () async {
+  test('recovers a completed turn when OpenCode reports a structured error',
+      () async {
     final OpenCodeApiClient client = OpenCodeApiClient(
       configuration: _configuration,
       host: _FakeOpenCodeHost(),
-      transport: _FakeJsonTransport(timeoutError: true),
+      transport: _FakeJsonTransport(structuredErrorWithRecovery: true),
     );
 
-    expect(
-      () => client.generate(
+    final ProviderGenerationOutput result = await client.generate(
+      const ProviderGenerationInput(
+        userPrompt: 'Crie uma tela',
+        systemPrompt: 'Retorne JSON',
+        outputSchema: <String, Object?>{'type': 'object'},
+      ),
+    );
+
+    expect(result.document['specVersion'], '1.0');
+  });
+
+  test('classifies transport timeout as a provider timeout', () async {
+    final _FakeJsonTransport transport = _FakeJsonTransport(timeoutError: true);
+    final OpenCodeApiClient client = OpenCodeApiClient(
+      configuration: _configuration,
+      host: _FakeOpenCodeHost(),
+      transport: transport,
+    );
+
+    await expectLater(
+      client.generate(
         const ProviderGenerationInput(
           userPrompt: 'Crie uma tela',
           systemPrompt: 'Retorne JSON',
@@ -125,6 +168,37 @@ void main() {
         ),
       ),
     );
+    expect(
+      transport.uris.any((Uri uri) => uri.path.endsWith('/abort')),
+      isTrue,
+    );
+  });
+
+  test('recovers a completed turn before aborting after a transport timeout',
+      () async {
+    final _FakeJsonTransport transport = _FakeJsonTransport(
+      timeoutError: true,
+      timeoutRecovery: true,
+    );
+    final OpenCodeApiClient client = OpenCodeApiClient(
+      configuration: _configuration,
+      host: _FakeOpenCodeHost(),
+      transport: transport,
+    );
+
+    final ProviderGenerationOutput result = await client.generate(
+      const ProviderGenerationInput(
+        userPrompt: 'Crie uma tela',
+        systemPrompt: 'Retorne JSON',
+        outputSchema: <String, Object?>{'type': 'object'},
+      ),
+    );
+
+    expect(result.document['specVersion'], '1.0');
+    expect(
+      transport.uris.any((Uri uri) => uri.path.endsWith('/abort')),
+      isFalse,
+    );
   });
 
   test('reads the generation timeout from the environment', () {
@@ -138,6 +212,13 @@ void main() {
 
     expect(configuration.generationTimeout, const Duration(seconds: 42));
   });
+
+  test('uses GPT-5.6 Luna when no model override is provided', () {
+    final OpenCodeConfiguration configuration =
+        OpenCodeConfiguration.fromEnvironment(const <String, String>{});
+
+    expect(configuration.model, 'openai/gpt-5.6-luna');
+  });
 }
 
 const OpenCodeConfiguration _configuration = OpenCodeConfiguration(
@@ -146,7 +227,7 @@ const OpenCodeConfiguration _configuration = OpenCodeConfiguration(
   port: 4096,
   workspaceDirectory: 'workspace',
   providerId: 'openai',
-  modelId: 'gpt-5.4-mini',
+  modelId: 'gpt-5.6-luna',
 );
 
 class _FakeOpenCodeHost implements OpenCodeHost {
@@ -168,12 +249,21 @@ class _FakeJsonTransport implements JsonHttpTransport {
     this.structured = false,
     this.structuredError = false,
     this.timeoutError = false,
+    this.timeoutRecovery = false,
+    this.structuredErrorWithRecovery = false,
+    this.requiresSessionRecovery = false,
+    this.clarification = false,
   });
 
   final bool structured;
   final bool structuredError;
   final bool timeoutError;
+  final bool timeoutRecovery;
+  final bool structuredErrorWithRecovery;
+  final bool requiresSessionRecovery;
+  final bool clarification;
   final List<Map<String, Object?>> bodies = <Map<String, Object?>>[];
+  final List<Uri> uris = <Uri>[];
 
   @override
   Future<Object?> send({
@@ -182,7 +272,8 @@ class _FakeJsonTransport implements JsonHttpTransport {
     Object? body,
     Duration timeout = const Duration(seconds: 120),
   }) async {
-    if (timeoutError) {
+    uris.add(uri);
+    if (timeoutError && method == 'POST' && uri.path.endsWith('/message')) {
       throw const JsonHttpException(
         code: 'timeout',
         message: 'timeout',
@@ -191,6 +282,54 @@ class _FakeJsonTransport implements JsonHttpTransport {
     if (body is Map<String, Object?>) bodies.add(body);
     if (uri.path == '/session') {
       return <String, Object?>{'id': 'ses_test'};
+    }
+    if (uri.path.endsWith('/abort')) return true;
+    if (structuredErrorWithRecovery &&
+        method == 'POST' &&
+        uri.path.endsWith('/message')) {
+      return <String, Object?>{
+        'info': <String, Object?>{
+          'error': <String, Object?>{
+            'name': 'StructuredOutputError',
+          },
+        },
+        'parts': <Object?>[],
+      };
+    }
+    if ((requiresSessionRecovery ||
+            timeoutRecovery ||
+            structuredErrorWithRecovery) &&
+        method == 'GET') {
+      return <Object?>[
+        <String, Object?>{
+          'info': <String, Object?>{'role': 'assistant'},
+          'parts': <Object?>[
+            <String, Object?>{
+              'type': 'text',
+              'text':
+                  '{"specVersion":"1.0","screen":{"id":"a","title":"A","root":{"id":"root","type":"Divider"}}}',
+            },
+          ],
+        },
+      ];
+    }
+    if (requiresSessionRecovery) {
+      return <String, Object?>{
+        'info': <String, Object?>{},
+        'parts': <Object?>[],
+      };
+    }
+    if (clarification) {
+      return <String, Object?>{
+        'info': <String, Object?>{},
+        'parts': <Object?>[
+          <String, Object?>{
+            'type': 'text',
+            'text':
+                '{"type":"clarification","question":"A tela deve permitir editar registros?","options":["Somente criar","Criar e editar"]}',
+          },
+        ],
+      };
     }
     if (structured) {
       return <String, Object?>{

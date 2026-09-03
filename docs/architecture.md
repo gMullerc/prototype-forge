@@ -11,6 +11,8 @@ The language model is a composer. It never supplies executable Dart code to the 
 ```text
 studio application
   -> prototype_flutter
+      -> prototype_interaction
+          -> prototype_spec
       -> prototype_runtime
           -> prototype_spec
 
@@ -45,9 +47,19 @@ Pure Dart package responsible only for the versioned JSON format and structural 
 
 Pure Dart package that owns component contracts, property validation, limits, prototype snapshots and orchestration of decoding plus validation.
 
+### prototype_interaction
+
+Pure Dart package that owns ephemeral prototype state, allowlisted declarative
+effects, conditional visibility, selected state and form validation. It has no
+Flutter, Studio, provider or design-system dependency. Supported MVP effects
+are `setValue`, `toggleValue`, `reset`, `validate` and `showMessage`.
+
 ### prototype_flutter
 
-Flutter adapter that recursively renders validated component nodes using factories supplied by a catalog. It emits typed action events and never interprets arbitrary code.
+Flutter adapter that recursively renders validated component nodes using
+factories supplied by a catalog. For Prototype Spec 1.1 it connects factories
+to the interaction controller; Prototype Spec 1.0 remains static. It emits
+typed action events and never interprets arbitrary code.
 
 ### prototype_material_catalog
 
@@ -90,6 +102,12 @@ Flutter Web composition root and PM workbench. It owns provider selection, conve
 Pure Dart provider-neutral port used by the Studio application. Deterministic,
 OpenCode and future agents implement the same minimal interface.
 
+The optional `PrototypeConversationalAgent` capability extends that port with a
+single `PrototypeAgentTurn`. A turn is either a clarification question or a
+contract. This keeps the dialogue policy in the application layer and lets
+legacy agents continue returning contracts without knowing about conversation
+state.
+
 ### prototype_workspace
 
 Pure Dart project and review domain. It owns immutable revisions, comments and
@@ -126,25 +144,49 @@ Local Dart service and composition root for provider adapters. Its application
 use case knows `PrototypeProvider`, while only the OpenCode infrastructure
 adapter knows the OpenCode HTTP API or process lifecycle.
 
+The Copilot adapter is a separate process-based provider. It uses the CLI's
+programmatic prompt mode, translates the text response into the neutral
+provider output and never lets Copilot tools reach the preview. Its process
+runner denies shell, read, write, URL and memory capabilities, and disables the
+built-in MCP server for the generation session.
+
 Generation requests have an explicit timeout boundary. The gateway defaults to
-90 seconds per OpenCode generation and returns the stable `provider_timeout`
-error code when that boundary is reached. The Studio can cancel its current
-request at any time; a late response is ignored and cannot replace a newer
-prototype state.
+150 seconds per OpenCode generation and returns the stable `provider_timeout`
+error code when that boundary is reached. It also performs a best-effort abort
+of the timed-out OpenCode session so the next generation does not inherit a
+stale `busy` state. The Studio can cancel its current request at any time; a
+late response is ignored and cannot replace a newer prototype state.
+
+### Local tool discovery
+
+The Flutter Web client cannot inspect the host operating system directly. The
+local gateway therefore exposes `GET /v1/tools`, backed by the independent
+`prototype_tool_discovery` contract. Its process adapter checks only registered
+executables through `where`/`which` and a bounded `--version` probe.
+
+The response reports tool presence and version for OpenCode, GitHub Copilot
+CLI, OpenAI Codex CLI, Claude Code, Gemini CLI and Aider. It deliberately does
+not inspect environment variables, keychains, credential files or tokens, and
+`credentialsChecked` remains `false`. Adding another tool means registering a
+new definition and, later, an adapter; the Studio and renderer do not change.
 
 ## Prototype request flow
 
 ```text
 brief
-  -> PrototypeAgent.generate
+  -> PrototypeConversationalAgent.respond (when available)
+  -> clarification question + PM answer (zero or more bounded rounds)
+  -> PrototypeAgentTurn.contract
   -> local gateway protocol (for OpenCode)
   -> provider structured output
   -> raw Prototype Spec JSON
   -> PrototypeEngine.load
-  -> PrototypeSpecDecoder
-  -> PrototypeValidator
+  -> PrototypeSpecDecoder + PrototypeValidator
+  -> one bounded repair turn when the contract is invalid
+  -> PrototypeSpecDecoder + PrototypeValidator
   -> PrototypeSnapshot.ready
   -> immutable local revision
+  -> PrototypeInteractionController (Spec 1.1 only)
   -> PrototypeSurface
   -> registered Material/design-system factories
 
@@ -160,7 +202,11 @@ approved revision
 - Unknown properties are rejected.
 - IDs must be unique.
 - Component count and tree depth are bounded.
-- Actions are inert data emitted to the host application.
+- Prototype Spec 1.0 actions are inert data emitted to the host application.
+- Prototype Spec 1.1 actions execute only allowlisted local effects over
+  in-memory state; they cannot invoke arbitrary functions, network or files.
+- An invalid generated contract can trigger at most one automatic repair turn;
+  a repair is accepted only after a fresh local validation.
 - Remote URLs, scripts, inline catalogs and arbitrary functions are not part of version 1.
 - OpenCode tool permissions are denied for generation sessions.
 - The gateway and OpenCode bind only to the loopback interface.

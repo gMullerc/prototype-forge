@@ -28,10 +28,34 @@ class ProviderGenerationOutput {
   const ProviderGenerationOutput({
     required this.conversationId,
     required this.document,
+    this.clarification,
   });
+
+  ProviderGenerationOutput.clarification({
+    required this.conversationId,
+    required String question,
+    List<String> options = const <String>[],
+  })  : document = const <String, Object?>{},
+        clarification = ProviderClarification(
+          question: question,
+          options: options,
+        );
 
   final String conversationId;
   final Map<String, Object?> document;
+  final ProviderClarification? clarification;
+
+  bool get isClarification => clarification != null;
+}
+
+class ProviderClarification {
+  const ProviderClarification({
+    required this.question,
+    this.options = const <String>[],
+  });
+
+  final String question;
+  final List<String> options;
 }
 
 class ProviderGenerationException implements Exception {

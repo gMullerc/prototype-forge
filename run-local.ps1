@@ -1,4 +1,8 @@
-param([string]$FlutterPath = '')
+param(
+    [string]$FlutterPath = '',
+    [string]$GatewayHost = '',
+    [int]$GatewayPort = 0
+)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'foundry\tool\resolve-flutter.ps1')
@@ -8,7 +12,28 @@ $dart = Resolve-DartCommand -FlutterCommand $flutter
 $appDirectory = Join-Path $PSScriptRoot 'studio'
 $gatewayDirectory = Join-Path $PSScriptRoot 'foundry\services\local_gateway'
 $runtimeDirectory = Join-Path $PSScriptRoot '.runtime'
-$gatewayUrl = 'http://127.0.0.1:8790'
+$gatewayHost = if ($GatewayHost) {
+    $GatewayHost
+}
+elseif ($env:PROTOTYPE_GATEWAY_HOST) {
+    $env:PROTOTYPE_GATEWAY_HOST
+}
+else {
+    '127.0.0.1'
+}
+$gatewayPort = if ($GatewayPort -gt 0) {
+    $GatewayPort
+}
+elseif ($env:PROTOTYPE_GATEWAY_PORT) {
+    [int]$env:PROTOTYPE_GATEWAY_PORT
+}
+else {
+    8790
+}
+if ($gatewayPort -lt 1 -or $gatewayPort -gt 65535) {
+    throw "GatewayPort deve estar entre 1 e 65535: $gatewayPort"
+}
+$gatewayUrl = "http://${gatewayHost}:${gatewayPort}"
 $gatewayProcess = $null
 $ownsGateway = $false
 $shutdownToken = [guid]::NewGuid().ToString('N')
@@ -50,7 +75,11 @@ try {
 
         $previousToken = $env:PROTOTYPE_GATEWAY_SHUTDOWN_TOKEN
         $previousWorkspace = $env:PROTOTYPE_WORKSPACE
+        $previousGatewayHost = $env:PROTOTYPE_GATEWAY_HOST
+        $previousGatewayPort = $env:PROTOTYPE_GATEWAY_PORT
         $env:PROTOTYPE_GATEWAY_SHUTDOWN_TOKEN = $shutdownToken
+        $env:PROTOTYPE_GATEWAY_HOST = $gatewayHost
+        $env:PROTOTYPE_GATEWAY_PORT = "$gatewayPort"
         if ([string]::IsNullOrWhiteSpace($env:PROTOTYPE_WORKSPACE)) {
             $env:PROTOTYPE_WORKSPACE = $PSScriptRoot
         }
@@ -77,6 +106,18 @@ try {
             else {
                 $env:PROTOTYPE_WORKSPACE = $previousWorkspace
             }
+            if ($null -eq $previousGatewayHost) {
+                Remove-Item Env:PROTOTYPE_GATEWAY_HOST -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:PROTOTYPE_GATEWAY_HOST = $previousGatewayHost
+            }
+            if ($null -eq $previousGatewayPort) {
+                Remove-Item Env:PROTOTYPE_GATEWAY_PORT -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:PROTOTYPE_GATEWAY_PORT = $previousGatewayPort
+            }
         }
         $ownsGateway = $true
 
@@ -101,7 +142,7 @@ try {
         & $flutter pub get
         if ($LASTEXITCODE -ne 0) { throw 'flutter pub get falhou.' }
 
-        & $flutter run -d chrome
+        & $flutter run -d chrome "--dart-define=PROTOTYPE_GATEWAY_URL=$gatewayUrl"
         if ($LASTEXITCODE -ne 0) { throw 'flutter run falhou.' }
     }
     finally {

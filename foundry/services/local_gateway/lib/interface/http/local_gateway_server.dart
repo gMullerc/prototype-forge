@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:prototype_gateway_protocol/prototype_gateway_protocol.dart';
+import 'package:prototype_tool_discovery/prototype_tool_discovery.dart';
 
 import '../../application/generate_prototype.dart';
 import '../../domain/prototype_provider.dart';
+import '../../infrastructure/tools/tool_inventory.dart';
 
 class LocalGatewayServer {
   LocalGatewayServer({
@@ -12,17 +14,20 @@ class LocalGatewayServer {
     required int port,
     required GeneratePrototype generatePrototype,
     required PrototypeProviderRegistry providers,
+    required ToolInventory toolInventory,
     this.shutdownToken,
     this.onShutdown,
   })  : _host = host,
         _port = port,
         _generatePrototype = generatePrototype,
-        _providers = providers;
+        _providers = providers,
+        _toolInventory = toolInventory;
 
   final String _host;
   final int _port;
   final GeneratePrototype _generatePrototype;
   final PrototypeProviderRegistry _providers;
+  final ToolInventory _toolInventory;
   final String? shutdownToken;
   final Future<void> Function()? onShutdown;
   HttpServer? _server;
@@ -65,6 +70,10 @@ class LocalGatewayServer {
       }
       if (request.method == 'GET' && request.uri.path == gatewayHealthPath) {
         await _health(request.response);
+        return;
+      }
+      if (request.method == 'GET' && request.uri.path == gatewayToolsPath) {
+        await _tools(request.response);
         return;
       }
       if (request.method == 'POST' && request.uri.path == gatewayGeneratePath) {
@@ -152,6 +161,33 @@ class LocalGatewayServer {
         GatewayGenerateRequest.fromJson(payload);
     final GatewayGenerateResponse result = await _generatePrototype(generation);
     _json(request.response, HttpStatus.ok, result.toJson());
+  }
+
+  Future<void> _tools(HttpResponse response) async {
+    final List<GatewayToolInfo> tools = (await _toolInventory())
+        .map(
+          (tool) => GatewayToolInfo(
+            id: tool.definition.id,
+            label: tool.definition.label,
+            executable: tool.definition.executable,
+            status: switch (tool.availability) {
+              ToolAvailability.available => 'available',
+              ToolAvailability.notFound => 'not_found',
+              ToolAvailability.probeError => 'probe_error',
+            },
+            capabilities: tool.definition.capabilities,
+            executablePath: tool.executablePath,
+            version: tool.version,
+            diagnostic: tool.diagnostic,
+            setupHint: tool.definition.setupHint,
+          ),
+        )
+        .toList(growable: false);
+    _json(
+      response,
+      HttpStatus.ok,
+      GatewayToolsResponse(tools: tools).toJson(),
+    );
   }
 
   Future<Object?> _readJson(HttpRequest request) async {

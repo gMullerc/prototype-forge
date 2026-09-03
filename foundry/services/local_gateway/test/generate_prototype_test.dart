@@ -36,7 +36,19 @@ void main() {
 
     expect(response.providerId, 'fake');
     expect(provider.input?.systemPrompt, contains('Text'));
-    expect(provider.input?.outputSchema['\$defs'], isNotNull);
+    expect(provider.input?.systemPrompt, contains('Prototype Spec 1.1'));
+    final List<Object?> responseVariants =
+        provider.input?.outputSchema['oneOf']! as List<Object?>;
+    expect(responseVariants, hasLength(2));
+    final Map<String, Object?> contractVariant =
+        responseVariants[1]! as Map<String, Object?>;
+    final Map<String, Object?> properties =
+        contractVariant['properties']! as Map<String, Object?>;
+    final Map<String, Object?> document =
+        properties['document']! as Map<String, Object?>;
+    expect(document['\$defs'], isNotNull);
+    expect(document['properties'],
+        containsPair('interaction', isA<Map<String, Object?>>()));
   });
 
   test('rejects providers that were not registered', () {

@@ -72,8 +72,8 @@ Exit criteria:
 
 ### 2. Connect OpenCode without coupling it to the core
 
-Create a separate `prototype_opencode_adapter` package and a local gateway.
-The adapter receives a catalog prompt, returns raw Prototype Spec JSON and owns
+Create separate provider adapters and a local gateway. The adapters receive a
+catalog prompt, return raw Prototype Spec JSON and own
 timeouts, cancellation, diagnostics and one repair attempt. The gateway invokes
 the OpenCode installation and session already authorized on the PM machine. The
 Studio only depends on `PrototypeAgent`; it does not ask for, store or manage an
@@ -86,6 +86,27 @@ Exit criteria:
 - no credential screen or credential storage is added to the MVP;
 - provider contract tests run against recorded fixtures;
 - errors identify provider, phase and remediation without exposing secrets.
+
+### 2.1 Detectar ferramentas locais sem assumir um provedor — primeira versão concluída
+
+Como o Studio é Flutter Web, a inspeção do computador acontece exclusivamente
+no gateway local. O gateway consulta uma lista registrada de CLIs usando
+`where`/`which` e `--version`, devolvendo somente presença, versão e capacidade
+declarada. A interface deixa claro que “detectada” não significa “autenticada”.
+
+A primeira versão reconhece OpenCode, GitHub Copilot CLI, OpenAI Codex CLI,
+Claude Code, Gemini CLI e Aider. A lista é extensível por definições, sem
+alterar o contrato, o renderer ou a sessão do Studio.
+
+Não são lidos tokens, variáveis de ambiente, keychains nem arquivos de
+credenciais. A conexão real com cada CLI continua sendo uma etapa posterior,
+com um adapter próprio e permissões explícitas.
+
+O primeiro adapter adicional é o Copilot CLI. Ele usa o modo programático
+`copilot -p`, mantém a saída como texto até o parser extrair um único objeto
+JSON e traduz falhas de autenticação, timeout e resposta inválida para códigos
+neutros do gateway. A seleção do Copilot já está disponível no Studio; a
+autenticação continua sendo feita pelo usuário no CLI instalado.
 
 ### 3. Integrate the company design system
 
@@ -120,6 +141,10 @@ revisões, registrar notas, alternar entre celular/tablet/desktop e copiar um
 rascunho Flutter gerado pelo exporter Material. O fluxo não grava arquivos nem
 faz commits em repositórios externos.
 
+O fechamento do piloto adiciona backup manual versionado do workspace em JSON,
+restauração desse backup e scripts de diagnóstico para validar o ambiente local
+antes do primeiro uso.
+
 Próximos refinamentos deste marco:
 
 - renomear e arquivar projetos locais;
@@ -128,6 +153,28 @@ Próximos refinamentos deste marco:
 - editar ou resolver notas de revisão;
 - adicionar o exporter específico do design system da empresa;
 - medir quanto do rascunho exportado é reescrito pela engenharia.
+
+### 5. Tornar o protótipo interativo — primeira versão local concluída
+
+O Prototype Spec 1.1 adiciona estado inicial, ações declarativas e bindings de
+componente sem permitir código vindo do agente. O pacote puro Dart
+`prototype_interaction` interpreta somente efeitos registrados, enquanto o
+adapter Flutter conecta valores, erros e condições aos componentes do catálogo.
+
+O Studio inicia no modo `Interagir`, em que campos editáveis, seleção,
+visibilidade condicional e validação funcionam localmente. O modo `Inspecionar`
+preserva o fluxo anterior e registra eventos na conversa. Revisões 1.0 continuam
+compatíveis e estáticas.
+
+Exit criteria:
+
+- campos vinculados atualizam estado em memória;
+- opções selecionadas possuem feedback visual;
+- regiões condicionais respondem ao estado;
+- required, CPF, CNPJ e idade mínima bloqueiam submit inválido;
+- nenhum efeito acessa rede, arquivos, processos ou funções arbitrárias;
+- o catálogo Material e um adapter futuro usam a mesma fronteira;
+- testes Dart, Flutter e navegador cobrem a jornada de cadastro de pessoa.
 
 ## Decision gates
 

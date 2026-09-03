@@ -66,6 +66,9 @@ As variáveis abaixo alteram a execução sem editar o código:
 | `PROTOTYPE_OPENCODE_EXECUTABLE` | executável alternativo do OpenCode |
 | `PROTOTYPE_OPENCODE_MODEL` | modelo no formato `provider/model` |
 | `PROTOTYPE_OPENCODE_VARIANT` | variante de raciocínio do modelo |
+| `PROTOTYPE_COPILOT_EXECUTABLE` | executável alternativo do Copilot CLI |
+| `PROTOTYPE_COPILOT_MODEL` | modelo opcional do Copilot CLI |
+| `PROTOTYPE_COPILOT_TIMEOUT_SECONDS` | limite da geração do Copilot CLI |
 | `PROTOTYPE_WORKSPACE` | diretório de trabalho isolado do OpenCode |
 
 Exemplo no PowerShell:
@@ -84,10 +87,18 @@ usada em um fluxo explícito de manutenção.
 - `deterministic`: fixture local para desenvolvimento, testes e demonstração
   sem depender de processo externo;
 - `opencode`: integração via gateway, usando a sessão autorizada do OpenCode.
+- `copilot`: integração via gateway, usando o modo programático do Copilot CLI.
 
 O Studio depende apenas da porta `PrototypeAgent`. Adicionar outro provedor
 deve ser uma implementação de infraestrutura e uma alteração na composition
 root, sem alterar o runtime ou o renderer.
+
+## Ferramentas locais detectadas
+
+O botão de ferramentas no cabeçalho consulta `GET /v1/tools` no gateway local.
+Essa consulta verifica apenas comandos registrados no `PATH` e suas versões.
+Uma ferramenta marcada como “detectada” ainda pode exigir login próprio antes
+de ser usada; o Prototype Foundry não lê nem armazena credenciais.
 
 ## Validação do repositório
 
